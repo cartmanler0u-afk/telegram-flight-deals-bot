@@ -1,8 +1,8 @@
-import { readStore } from "../store.js";
+import { listFeeds } from "../store.js";
 
 export function registerListFeeds(bot) {
-  bot.command("listfeeds", (ctx) => {
-    const { feeds } = readStore();
+  bot.command("listfeeds", async (ctx) => {
+    const feeds = await listFeeds();
     if (feeds.length === 0) {
       ctx.reply("Aucun flux RSS configuré. Utilisez /addfeed <url>.");
       return;

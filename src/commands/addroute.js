@@ -1,9 +1,9 @@
-import { readStore, writeStore } from "../store.js";
+import { addRoute } from "../store.js";
 import { requireAdmin } from "./adminGuard.js";
 import { config } from "../config.js";
 
 export function registerAddRoute(bot) {
-  bot.command("addroute", (ctx) => {
+  bot.command("addroute", async (ctx) => {
     if (!requireAdmin(ctx)) return;
     if (!config.kiwiApiKey) {
       ctx.reply("⚠️ KIWI_API_KEY n'est pas configurée — la surveillance de routes est désactivée.");
@@ -16,7 +16,6 @@ export function registerAddRoute(bot) {
       return;
     }
 
-    const store = readStore();
     const route = {
       id: `${from}-${to}-${Date.now()}`.toUpperCase(),
       from: from.toUpperCase(),
@@ -24,8 +23,7 @@ export function registerAddRoute(bot) {
       maxPrice: Number(maxPrice),
       currency: (currency || "EUR").toUpperCase(),
     };
-    store.routes.push(route);
-    writeStore(store);
+    await addRoute(route);
     ctx.reply(
       `✅ Route surveillée : ${route.from} → ${route.to}, max ${route.maxPrice} ${route.currency} (id: \`${route.id}\`)`,
       { parse_mode: "Markdown" }

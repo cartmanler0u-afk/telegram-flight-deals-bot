@@ -1,8 +1,8 @@
-import { readStore, writeStore } from "../store.js";
+import { addFeed, listFeeds } from "../store.js";
 import { requireAdmin } from "./adminGuard.js";
 
 export function registerAddFeed(bot) {
-  bot.command("addfeed", (ctx) => {
+  bot.command("addfeed", async (ctx) => {
     if (!requireAdmin(ctx)) return;
     const url = ctx.message.text.split(" ").slice(1).join(" ").trim();
     if (!url) {
@@ -10,14 +10,13 @@ export function registerAddFeed(bot) {
       return;
     }
 
-    const store = readStore();
-    if (store.feeds.includes(url)) {
+    const existing = await listFeeds();
+    if (existing.includes(url)) {
       ctx.reply("Ce flux est déjà configuré.");
       return;
     }
 
-    store.feeds.push(url);
-    writeStore(store);
-    ctx.reply(`✅ Flux ajouté :\n${url}`);
+    const ok = await addFeed(url);
+    ctx.reply(ok ? `✅ Flux ajouté :\n${url}` : "⚠️ Erreur lors de l'ajout du flux.");
   });
 }

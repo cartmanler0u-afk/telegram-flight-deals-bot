@@ -66,6 +66,23 @@ obtenir une clé API gratuite, si vous voulez utiliser la surveillance par route
 (`/addroute`) en plus des flux RSS. Sans clé, cette fonctionnalité est simplement
 désactivée et le bot fonctionne avec les flux RSS seuls.
 
+### 5. `SUPABASE_URL` / `SUPABASE_SECRET_KEY`
+
+Le bot stocke ses données (salon cible, flux RSS, routes surveillées, historique des
+bons plans déjà postés) dans une base PostgreSQL Supabase, obligatoire pour lancer
+le bot.
+
+1. Créez un compte gratuit sur [supabase.com](https://supabase.com/) et un nouveau
+   projet
+2. Dans le tableau de bord du projet : **SQL Editor** → **New query**, collez le
+   contenu de [`schema.sql`](./schema.sql) fourni dans ce repo, puis **Run** — cela
+   crée les tables nécessaires (`bot_settings`, `feeds`, `routes`, `seen_deals`)
+3. Allez dans **Project Settings** → **API** :
+   - **Project URL** → à mettre dans `SUPABASE_URL`
+   - **service_role secret key** → à mettre dans `SUPABASE_SECRET_KEY` (⚠️ ne
+     jamais exposer cette clé publiquement, elle contourne les règles de sécurité
+     de la base)
+
 ## Lancer le bot
 
 ```bash

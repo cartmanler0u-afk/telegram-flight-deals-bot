@@ -1,13 +1,12 @@
 import cron from "node-cron";
 import { fetchAllRssDeals } from "./sources/rss.js";
 import { searchKiwiDeals } from "./sources/kiwi.js";
-import { readStore, isDealSeen, markDealSeen } from "./store.js";
+import { getChannelId, listFeeds, listRoutes, isDealSeen, markDealSeen } from "./store.js";
 import { postDeal } from "./poster.js";
 import { config } from "./config.js";
 
 export async function runDropCycle(bot) {
-  const store = readStore();
-  const chatId = store.channelId || config.defaultChannelId;
+  const chatId = (await getChannelId()) || config.defaultChannelId;
 
   if (!chatId) {
     console.log("Aucun salon configuré (utilisez /setchannel) — cycle ignoré.");
@@ -16,12 +15,14 @@ export async function runDropCycle(bot) {
 
   const deals = [];
 
-  if (store.feeds.length > 0) {
-    deals.push(...(await fetchAllRssDeals(store.feeds)));
+  const feeds = await listFeeds();
+  if (feeds.length > 0) {
+    deals.push(...(await fetchAllRssDeals(feeds)));
   }
 
-  if (config.kiwiApiKey && store.routes.length > 0) {
-    for (const route of store.routes) {
+  const routes = await listRoutes();
+  if (config.kiwiApiKey && routes.length > 0) {
+    for (const route of routes) {
       try {
         deals.push(...(await searchKiwiDeals(route, config.kiwiApiKey)));
       } catch (err) {
@@ -31,10 +32,11 @@ export async function runDropCycle(bot) {
   }
 
   for (const deal of deals) {
-    if (!deal.id || isDealSeen(deal.id)) continue;
+    if (!deal.id) continue;
+    if (await isDealSeen(deal.id)) continue;
     try {
       await postDeal(bot, chatId, deal);
-      markDealSeen(deal.id);
+      await markDealSeen(deal.id);
     } catch (err) {
       console.error(`Erreur envoi Telegram pour le deal ${deal.id} :`, err.message);
     }

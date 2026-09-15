@@ -1,43 +1,60 @@
-import fs from "node:fs";
-import path from "node:path";
+import { supabase } from "./database/supabase.js";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const STORE_PATH = path.join(DATA_DIR, "store.json");
-
-const DEFAULT_STORE = {
-  channelId: null,
-  feeds: [],
-  routes: [],
-  seenDeals: [],
-};
-
-function ensureStore() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(STORE_PATH)) fs.writeFileSync(STORE_PATH, JSON.stringify(DEFAULT_STORE, null, 2));
+export async function getChannelId() {
+  const { data } = await supabase.from("bot_settings").select("channel_id").eq("id", 1).maybeSingle();
+  return data?.channel_id ?? null;
 }
 
-export function readStore() {
-  ensureStore();
-  return JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
+export async function setChannelId(channelId) {
+  await supabase.from("bot_settings").update({ channel_id: String(channelId) }).eq("id", 1);
 }
 
-export function writeStore(store) {
-  ensureStore();
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
+export async function listFeeds() {
+  const { data } = await supabase.from("feeds").select("url").order("created_at", { ascending: true });
+  return (data || []).map((f) => f.url);
 }
 
-const MAX_SEEN_DEALS = 1000;
-
-export function isDealSeen(dealId) {
-  const store = readStore();
-  return store.seenDeals.includes(dealId);
+export async function addFeed(url) {
+  const { error } = await supabase.from("feeds").insert({ url });
+  return !error;
 }
 
-export function markDealSeen(dealId) {
-  const store = readStore();
-  store.seenDeals.push(dealId);
-  if (store.seenDeals.length > MAX_SEEN_DEALS) {
-    store.seenDeals = store.seenDeals.slice(-MAX_SEEN_DEALS);
-  }
-  writeStore(store);
+export async function removeFeed(url) {
+  const { data } = await supabase.from("feeds").delete().eq("url", url).select("url");
+  return (data || []).length > 0;
+}
+
+export async function listRoutes() {
+  const { data } = await supabase.from("routes").select("*").order("created_at", { ascending: true });
+  return (data || []).map((r) => ({
+    id: r.id,
+    from: r.origin,
+    to: r.destination,
+    maxPrice: r.max_price,
+    currency: r.currency,
+  }));
+}
+
+export async function addRoute(route) {
+  await supabase.from("routes").insert({
+    id: route.id,
+    origin: route.from,
+    destination: route.to,
+    max_price: route.maxPrice,
+    currency: route.currency,
+  });
+}
+
+export async function removeRoute(id) {
+  const { data } = await supabase.from("routes").delete().eq("id", id).select("id");
+  return (data || []).length > 0;
+}
+
+export async function isDealSeen(dealId) {
+  const { data } = await supabase.from("seen_deals").select("id").eq("id", dealId).maybeSingle();
+  return !!data;
+}
+
+export async function markDealSeen(dealId) {
+  await supabase.from("seen_deals").upsert({ id: dealId }, { onConflict: "id", ignoreDuplicates: true });
 }

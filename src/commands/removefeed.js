@@ -1,8 +1,8 @@
-import { readStore, writeStore } from "../store.js";
+import { removeFeed } from "../store.js";
 import { requireAdmin } from "./adminGuard.js";
 
 export function registerRemoveFeed(bot) {
-  bot.command("removefeed", (ctx) => {
+  bot.command("removefeed", async (ctx) => {
     if (!requireAdmin(ctx)) return;
     const url = ctx.message.text.split(" ").slice(1).join(" ").trim();
     if (!url) {
@@ -10,10 +10,7 @@ export function registerRemoveFeed(bot) {
       return;
     }
 
-    const store = readStore();
-    const before = store.feeds.length;
-    store.feeds = store.feeds.filter((f) => f !== url);
-    writeStore(store);
-    ctx.reply(before === store.feeds.length ? "Ce flux n'était pas configuré." : "✅ Flux retiré.");
+    const removed = await removeFeed(url);
+    ctx.reply(removed ? "✅ Flux retiré." : "Ce flux n'était pas configuré.");
   });
 }

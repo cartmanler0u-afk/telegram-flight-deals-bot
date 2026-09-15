@@ -1,8 +1,8 @@
-import { readStore } from "../store.js";
+import { listRoutes } from "../store.js";
 
 export function registerListRoutes(bot) {
-  bot.command("listroutes", (ctx) => {
-    const { routes } = readStore();
+  bot.command("listroutes", async (ctx) => {
+    const routes = await listRoutes();
     if (routes.length === 0) {
       ctx.reply("Aucune route surveillée. Utilisez /addroute.");
       return;
