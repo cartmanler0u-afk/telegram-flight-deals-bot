@@ -1,6 +1,6 @@
 // Briques d'interface réutilisées par les panneaux des pièces.
 
-import { h, clear, toast, haptic, openModal, confirmDialog, promptDialog, openLink, timeAgo, fmtSize } from "./dom.js";
+import { h, clear, toast, haptic, openModal, confirmDialog, promptDialog, openLink, shouldInterceptLinks, copyText, timeAgo, fmtSize } from "./dom.js";
 import { markdown } from "./markdown.js";
 import { DOC_KINDS, PRIORITIES, ROLES, TASK_TYPES, roleOf } from "../../shared/roster.js";
 import { taskProgress } from "../../shared/engine.js";
@@ -197,38 +197,50 @@ export async function openDocument(ctx, docId) {
     body.srcdoc = doc.content || "";
   } else {
     body = h("div", {},
-      doc.url ? h("div", { class: "card", style: { marginBottom: "12px" } }, h("div", { class: "small muted" }, "Lien"), h("a", { href: doc.url, onClick: (e) => { e.preventDefault(); openLink(doc.url); } }, doc.url)) : null,
+      doc.url ? h("div", { class: "card", style: { marginBottom: "12px" } }, h("div", { class: "small muted" }, "Lien"), h("a", { href: doc.url, target: "_blank", rel: "noopener noreferrer" }, doc.url)) : null,
       h("div", { class: "md", html: markdown(doc.content || (doc.url ? "" : "_(document vide)_")) }));
     body.addEventListener("click", (e) => {
       const a = e.target.closest("a[href]");
-      if (a && /^https?:/.test(a.getAttribute("href"))) {
+      if (a && shouldInterceptLinks() && /^https?:/.test(a.getAttribute("href"))) {
         e.preventDefault();
         openLink(a.getAttribute("href"));
       }
     });
   }
 
-  const sendLabel = ctx.backend.mode === "telegram" ? "📤 Recevoir dans Telegram" : "⬇️ Télécharger";
-  const modal = openModal({
-    title: `${DOC_KINDS[doc.kind]?.icon || "📄"} ${doc.title}`,
-    body,
-    full: isSite,
-    footer: [
-      h("button", {
+  const telegram = ctx.backend.mode === "telegram";
+  const canDownload = !telegram && window.self === window.top;
+  const exportButtons = [
+    telegram
+      ? h("button", {
         class: "btn primary",
         onClick: async (e) => {
           const button = e.currentTarget;
           button.disabled = true;
           try {
-            const how = await ctx.backend.sendDocument(doc.id);
-            toast(how === "telegram" ? "📤 Envoyé dans ta conversation avec le bot" : "⬇️ Téléchargement lancé", "success");
+            await ctx.backend.sendDocument(doc.id);
+            toast("📤 Envoyé dans ta conversation avec le bot", "success");
           } catch (err) {
             toast(err.message, "error");
           } finally {
             button.disabled = false;
           }
         },
-      }, sendLabel),
+      }, "📤 Recevoir dans Telegram")
+      : h("button", {
+        class: "btn primary",
+        onClick: async () => {
+          if (await copyText(doc.content || doc.url || "", doc.title)) toast(isSite ? "📋 Code HTML copié" : "📋 Copié", "success");
+        },
+      }, isSite ? "📋 Copier le HTML" : "📋 Copier"),
+    canDownload ? h("button", { class: "btn", onClick: () => ctx.backend.sendDocument(doc.id) }, "⬇️") : null,
+  ];
+  const modal = openModal({
+    title: `${DOC_KINDS[doc.kind]?.icon || "📄"} ${doc.title}`,
+    body,
+    full: isSite,
+    footer: [
+      ...exportButtons.filter(Boolean),
       h("button", {
         class: "btn",
         onClick: () => ctx.run("doc.update", { docId: doc.id, pinned: !doc.pinned }, doc.pinned ? "Désépinglé" : "📌 Épinglé").then(() => modal.close()),

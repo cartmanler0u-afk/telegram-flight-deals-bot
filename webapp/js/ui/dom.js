@@ -88,11 +88,43 @@ export function hasModal() {
   return modalStack.length > 0;
 }
 
-export function confirmDialog(message) {
-  if (tg?.showConfirm && tg.isVersionAtLeast?.("6.2")) {
+export function confirmDialog(message, { confirmLabel = "Confirmer", danger = true } = {}) {
+  if (tg?.initData && tg.showConfirm && tg.isVersionAtLeast?.("6.2")) {
     return new Promise((resolve) => tg.showConfirm(message, (ok) => resolve(!!ok)));
   }
-  return Promise.resolve(window.confirm(message));
+  // Confirmation intégrée à la page (window.confirm est bloqué dans certains cadres).
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      modal.close();
+      resolve(value);
+    };
+    const modal = openModal({
+      title: "Confirmation",
+      body: h("p", { style: { margin: 0, lineHeight: 1.5 } }, message),
+      footer: [
+        h("button", { class: "btn ghost", onClick: () => finish(false) }, "Annuler"),
+        h("button", { class: `btn ${danger ? "danger" : "primary"} grow`, onClick: () => finish(true) }, confirmLabel),
+      ],
+      onClose: () => finish(false),
+    });
+  });
+}
+
+// Copie dans le presse-papiers, avec repli sur une zone de texte sélectionnée.
+export async function copyText(text, title = "Copier") {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = h("textarea", { class: "textarea", readonly: true, style: { minHeight: "50vh", fontFamily: "ui-monospace, monospace", fontSize: "12px" } });
+    area.value = text;
+    openModal({ title, body: h("div", {}, h("p", { class: "small muted" }, "Sélectionne le texte puis copie-le."), area) });
+    setTimeout(() => area.select(), 60);
+    return false;
+  }
 }
 
 export function promptDialog({ title, label, placeholder = "", submit = "Valider", multiline = true }) {
@@ -121,8 +153,14 @@ export function promptDialog({ title, label, placeholder = "", submit = "Valider
 }
 
 export function openLink(url) {
-  if (tg?.openLink) tg.openLink(url);
+  if (tg?.initData && tg.openLink) tg.openLink(url);
   else window.open(url, "_blank", "noopener");
+}
+
+// Dans Telegram, les liens externes passent par le navigateur de Telegram ;
+// ailleurs, on laisse le lien <a target="_blank"> faire son travail.
+export function shouldInterceptLinks() {
+  return !!(tg?.initData && tg.openLink);
 }
 
 // ---------------------------------------------------------------- formats
