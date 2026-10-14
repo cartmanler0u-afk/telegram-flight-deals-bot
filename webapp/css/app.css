@@ -417,3 +417,29 @@ button.chip { cursor: pointer; }
 .quick b { font-size: 22px; }
 .quick:active { transform: scale(0.97); }
 details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; }
+
+/* ---------- Bâtiment 0 — THE MADHOUSE ---------- */
+.mh-tabs { position: sticky; top: 0; z-index: 2; padding: 6px 0 10px; background: var(--panel-solid, rgba(14, 17, 32, 0.96)); overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.mh-tabs::-webkit-scrollbar { display: none; }
+.mh-tabs .chip { flex: none; }
+.mh-content > * + * { margin-top: 10px; }
+.mh-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; background: var(--card-strong, rgba(255,255,255,.08)); margin-right: 4px; }
+.mh-tag.warn { color: #ffd59a; background: rgba(242, 165, 65, 0.18); }
+.mh-tag.info { color: #b9b2ff; background: rgba(124, 108, 255, 0.18); }
+.mh-tag.good { color: #a9f0cc; background: rgba(76, 195, 138, 0.16); }
+.mh-tag.bad { color: #ffb3bb; background: rgba(239, 93, 108, 0.18); }
+.mh-tag.gold { color: var(--gold); background: rgba(224, 179, 84, 0.16); }
+.mh-event p { margin: 6px 0 0; }
+.mh-event.imp-4, .mh-event.imp-5 { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.mh-event.rare { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(224, 179, 84, 0.18); }
+.mh-narration { font-style: italic; color: #d9d3ff; }
+.mh-person { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; gap: 10px; }
+.mh-avatar { font-size: 22px; flex: none; }
+.mh-person .right { text-align: right; }
+.mh-mystery.solved { opacity: 0.85; }
+.mh-mystery ul, .mh-event ul { margin: 6px 0 0; padding-left: 18px; }
+.mh-floor .mh-level { width: 28px; text-align: center; font-size: 16px; }
+.mh-floor.rumored, .mh-floor.sealed { border-style: dashed; }
+.mh-floor.contested { border-color: var(--warn); }
+.mh-kpis { grid-template-columns: repeat(3, 1fr); }
+.mh-kpis .kpi b { font-size: 17px; white-space: nowrap; }

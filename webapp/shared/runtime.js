@@ -12,6 +12,7 @@ import {
   pendingJobs,
 } from "./engine.js";
 import { createTemplateGenerator } from "./templates.js";
+import { worldJobPacket, attachWorldNarration, worldView, personSheet, buildReport } from "./world/index.js";
 
 export class OfficeRuntime {
   constructor({
@@ -91,6 +92,11 @@ export class OfficeRuntime {
     } else if (job.kind === "brief") {
       const { result } = await this.withFallback("directorBrief", { state: this.state, now });
       if (attachBrief(this.state, result, this.now())) this.onChange();
+    } else if (job.kind === "world") {
+      // Récit IA d'un événement du Bâtiment : sortie non fiable, nettoyée et purement décorative.
+      const packet = worldJobPacket(this.state.world, job.id);
+      const { result, meta } = packet ? await this.withFallback("narrateWorld", { packet }) : { result: null, meta: { ai: false } };
+      if (attachWorldNarration(this.state, job.id, result, meta, this.now())) this.onChange();
     }
   }
 
@@ -102,6 +108,7 @@ export class OfficeRuntime {
     if (job.kind === "task") attachTaskOutput(this.state, job.id, { kind: "report", content: message }, { error: message });
     else if (job.kind === "meeting") attachMeetingSummary(this.state, job.id, { summary: message }, now, { error: message });
     else if (job.kind === "brief") attachBrief(this.state, message, now);
+    else if (job.kind === "world") attachWorldNarration(this.state, job.id, null, { error: message }, now);
     this.onChange();
   }
 
@@ -117,6 +124,10 @@ export class OfficeRuntime {
       });
       return result;
     }
+    // Lectures du Bâtiment 0 (servies à la demande : le monde complet n'est pas dans le polling).
+    if (type === "world.view") return worldView(this.state.world, this.state);
+    if (type === "world.person") return personSheet(this.state.world, this.state, String(payload.id || ""));
+    if (type === "world.report") return buildReport(this.state.world, { since: this.state.world.report.lastSeenAt, until: this.now() });
     throw new Error(`Requête inconnue : ${type}`);
   }
 

@@ -19,6 +19,10 @@ export const config = {
   anthropicEffort: process.env.ANTHROPIC_EFFORT || "medium",
   anthropicWebSearch: process.env.ANTHROPIC_WEB_SEARCH !== "false",
   officeNotifications: process.env.OFFICE_NOTIFICATIONS !== "false",
+  // Bâtiment 0 (THE MADHOUSE) : simulation autonome, notifications, IA narrative budgétée
+  worldNotifications: process.env.WORLD_NOTIFICATIONS !== "false",
+  worldAi: process.env.WORLD_AI !== "false",
+  worldAiDailyCalls: Math.max(0, Math.min(200, Number(process.env.WORLD_AI_DAILY_CALLS ?? 6) || 0)),
 };
 
 if (!config.telegramToken) {

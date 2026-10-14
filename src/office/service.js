@@ -8,9 +8,10 @@ const SAVE_DELAY_MS = 1500;
 const TICK_MS = 3000;
 
 export class OfficeService {
-  constructor({ repository, generator = null, notify = async () => {}, logger = console }) {
+  constructor({ repository, generator = null, notify = async () => {}, logger = console, worldAi = { available: false, cap: 0 } }) {
     this.repository = repository;
     this.generator = generator;
+    this.worldAi = worldAi;
     this.notify = notify;
     this.logger = logger;
     this.offices = new Map(); // ownerId -> { runtime, rev }
@@ -39,6 +40,13 @@ export class OfficeService {
   }
 
   mount(ownerId, state) {
+    // L'IA narrative du Bâtiment dépend de l'opérateur (clé API, WORLD_AI, plafond quotidien),
+    // jamais d'un réglage en jeu : le plafond s'impose à tout réglage enregistré.
+    if (state.world?.config?.ai) {
+      state.world.config.ai.available = !!(this.worldAi.available && this.generator?.ai);
+      state.world.config.ai.cap = this.worldAi.cap;
+      state.world.config.ai.dailyCalls = Math.min(state.world.config.ai.dailyCalls, this.worldAi.cap);
+    }
     const office = { runtime: null, rev: 1 };
     office.runtime = new OfficeRuntime({
       state,

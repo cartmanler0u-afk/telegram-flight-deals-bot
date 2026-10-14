@@ -312,6 +312,10 @@ export function createTemplateGenerator({ latencyMs = 600 } = {}) {
   return {
     name: "templates",
     ai: false,
+    // Sans IA, le Bâtiment se passe de récit : ses événements parlent d'eux-mêmes.
+    async narrateWorld() {
+      return null;
+    },
     async runTask({ task, agent, state, now }) {
       await wait(latencyMs);
       const tz = state.settings.tzOffset || 0;

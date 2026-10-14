@@ -9,6 +9,8 @@ import { createSupabaseRepository } from "./repository.js";
 import { createOfficeApp } from "./server.js";
 import { OfficeService } from "./service.js";
 import { setDealSink } from "./bridge.js";
+import { registerBuilding, renderNote } from "./building.js";
+import { isAdmin } from "../commands/adminGuard.js";
 
 const NOTIFIED_KINDS = new Set(["reminder", "needs_approval", "meeting_started", "meeting_summary", "task_done"]);
 
@@ -36,7 +38,15 @@ export async function startOffice(bot) {
   const service = new OfficeService({
     repository: createSupabaseRepository(supabase),
     generator,
+    worldAi: { available: config.worldAi, cap: config.worldAiDailyCalls },
     notify: async (ownerId, notes, state) => {
+      // Bâtiment 0 : messages déjà triés par la politique anti-spam du moteur.
+      if (config.worldNotifications) {
+        for (const note of notes.filter((n) => n.kind === "world_alert" || n.kind === "world_report")) {
+          const msg = renderNote(note, state);
+          if (msg) await bot.telegram.sendMessage(ownerId, msg.text, { parse_mode: "HTML", ...(msg.extra || {}) });
+        }
+      }
       if (!config.officeNotifications) return;
       const lines = notes.filter((n) => NOTIFIED_KINDS.has(n.kind)).map((n) => notificationText(n, state));
       if (lines.length === 0) return;
@@ -45,6 +55,7 @@ export async function startOffice(bot) {
   });
   await service.start();
   setDealSink((deals) => service.broadcastDeals(deals));
+  registerBuilding(bot, { service, isAdmin, aiCap: config.worldAiDailyCalls });
 
   const app = createOfficeApp({
     service,

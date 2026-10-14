@@ -122,6 +122,12 @@ Ajoutez ensuite chaque flux avec `/addfeed <url>` directement dans Telegram.
 | `/listroutes` | Liste les routes surveillées | Tous |
 | `/testdrop` | Force un cycle de recherche immédiat | Admin |
 | `/office` (ou `/qg`) | Ouvre le QG 3D des agents IA (mini app) | Admin |
+| `/building` (ou `/batiment`) | Bâtiment 0 : vue d'ensemble + menu à boutons | Admin |
+| `/report` | Rapport « Pendant ton absence » (+ boutons de décision) | Admin |
+| `/news` `/floors` `/agents` `/agent <nom>` | Actualités, étages, occupants, fiche d'un personnage | Admin |
+| `/organizations` `/economy` `/laws` `/plots` | Organisations, économie, lois & tribunal, intrigues | Admin |
+| `/mysteries` `/investigate` `/rumors` `/anomalies` `/history` | Mystères (mandater un enquêteur), rumeurs, anomalies, chronique | Admin |
+| `/madhouse_config` | Réglages : cycle, pause, notifications, IA narrative | Admin |
 
 ## 🏢 QG des agents IA (mini app 3D)
 
@@ -313,6 +319,97 @@ src/commands/office.js     Commandes /office et /qg
 Sécurité : chaque requête de la mini app est authentifiée par la signature `initData` de
 Telegram (HMAC avec le token du bot) ; chaque utilisateur a son propre QG ; les sites
 générés sont prévisualisés dans une iframe isolée (`sandbox`).
+
+## 🏚️ THE MADHOUSE — le Bâtiment 0
+
+Ton entreprise (le QG) occupe désormais l'**Étage 1** d'un bâtiment fictif, absurde et
+persistant qui vit **sans toi** : 17 étages (dont un Étage 13 qui n'existe qu'en rumeur),
+une quinzaine de résidents (concierge, Syndic Générale, juge, banquier, journaliste, député,
+un homard…), tes employés et tes chats, des entreprises internes, un parlement, un tribunal,
+une banque, deux médias et un Département des Mystères. Tout est simulé, rien n'est réel :
+**aucune transaction financière réelle, aucune publication, aucune action extérieure**.
+
+### Ce qui se passe
+
+- **Personnages autonomes** : chacun agit selon son ambition (pouvoir, fortune, célébrité,
+  vérité, protéger les siens, changer de rôle…), ce qu'il sait et les lois en vigueur :
+  candidatures, partis, lobbying, putschs, start-up absurdes, prêts, enquêtes, fuites,
+  médiations, syndicalisation, coups d'éclat à la radio. Un secondaire peut devenir une
+  légende ; un puissant peut chuter.
+- **Économie virtuelle** (Crédits) : salaires, déjeuners au Réfectoire, loyers, prêts et
+  défauts, faillites, rachats de parts, dividendes, frais bancaires, inflation. Tout passe par
+  des virements validés ; seul le Trésor du Syndic émet des Crédits (Charte, R3).
+- **Politique et justice** : lois tirées d'un catalogue où **chaque loi change vraiment la
+  simulation** (Taxe sur la Sieste, Prohibition Fromagère, Couvre-feu des Couloirs, Loi sur la
+  Personnalité Animale…), quorum, votes, recours au Tribunal, élections, grèves.
+- **Médias** : la Gazette (sérieuse, mais possédée par la Banque) et Radio Cage d'Escalier
+  (satirique) publient des articles exacts, incomplets, biaisés… ou faux, qui finissent
+  parfois en procès en diffamation.
+- **WTF engine** : arrêts de l'Ascenseur B à l'Étage 13, doubles, morts administratives,
+  couloirs impossibles, souvenirs contradictoires — rares, conditionnés et **enregistrés avec
+  leur portée** ; le passé n'est jamais réécrit.
+- **Mystères** : trois grands mystères dont la vérité est tirée au sort et gardée secrète, plus
+  des mystères émergents (« Qui a lancé la rumeur ? ») construits à partir d'événements réels.
+  Indices, hypothèses vraies ou fausses, affaires classées : un mystère ne se résout que si
+  les preuves suivent, même si tu le demandes.
+- **CHAOS DIRECTOR** : il ne joue pas de scénario, il repère dans l'état du monde les
+  occasions qui relient des éléments existants (dette + rivalité, loi menaçante + contrat
+  antidaté, licencié fortuné…) et ouvre des **intrigues** persistantes qui s'enrichissent,
+  s'endorment, se réveillent, fusionnent et se dénouent.
+- **Tes décisions** : promotions, investissements, primes de grève… arrivent avec des boutons
+  Oui/Non (Telegram et mini app). Tu peux mandater un enquêteur. Tu arbitres ; tu ne
+  réécris pas l'histoire.
+
+### Notifications et rapport
+
+Le moteur ne notifie que ce qui compte (importance ≥ 4, événements rares, décisions), au plus
+**2 messages par jour**, espacés de 2 h, jamais entre 23 h et 8 h, regroupés par 3. Chaque
+matin (9 h), s'il s'est passé quelque chose, il envoie le rapport éditorial **« Pendant ton
+absence »** : faits majeurs avec leur **chaîne causale** (« pourquoi »), pouvoir, économie,
+intrigues, ascensions et chutes, mystères, rumeurs — les faits, rumeurs et hypothèses sont
+toujours étiquetés. Tout se règle avec `/madhouse_config`.
+
+### Architecture et garanties
+
+```
+webapp/shared/world/
+  index.js     orchestrateur : cycles de 30 min, rattrapage borné, annulation d'un cycle si un
+               invariant casse, notifications anti-spam, actions du joueur (world.*)
+  ops.js       noyau transactionnel : propositions d'opérations atomiques, validateur,
+               dédoublonnage, invariants (masse monétaire, soldes, organisations)
+  memory.js    événements immuables + causes, faits (confirmé / secret / rumeur / hypothèse),
+               connaissance par personnage, propagation des rumeurs, chronique compactée
+  state.js     création du monde, synchronisation avec le QG (embauches, licenciements, chats)
+  economy.js · politics.js · agents.js · media.js · wtf.js · director.js   systèmes
+  report.js · view.js   rapport éditorial et vues sans secrets ; ai.js   IA narrative budgétée
+src/office/building.js     commandes et boutons Telegram du Bâtiment
+webapp/js/ui/madhouse.js   panneau « Bâtiment » de la mini app
+```
+
+- **Persistance** : le monde est stocké dans l'état du QG (`office_state`, jsonb), sauvegardé
+  avec lui ; aucune migration SQL n'est nécessaire. Le temps du Bâtiment suit le temps réel :
+  après un redémarrage, les cycles manqués sont rattrapés (24 max par passage, 3 jours max).
+- **Déterminisme** : le hasard d'un cycle dépend de la graine du monde et du numéro de cycle ;
+  rejouer un cycle après un crash donne exactement le même résultat (pas de double application).
+- **Validation** : toute modification passe par une proposition validée (fonds suffisants,
+  personnages et lieux existants, causes réellement enregistrées, champs autorisés, loi déposée
+  par un député, pas de doublon ni de quasi-doublon) ; un rejet est journalisé, jamais appliqué
+  en silence. Après chaque cycle, les invariants sont vérifiés et le cycle est annulé s'ils
+  cassent.
+- **Connaissance** : un personnage ne sait que ce qu'il a appris ; le joueur ne voit ni la
+  vérité des mystères, ni la véracité des rumeurs, ni les secrets non révélés, ni les
+  virements occultes. Le monde complet n'est jamais envoyé dans le polling de la mini app.
+- **IA hybride** : la simulation est entièrement déterministe et fonctionne sans IA. Avec une
+  clé Claude, seuls les moments rares ou majeurs reçoivent un court récit, dans la limite de
+  `WORLD_AI_DAILY_CALLS` appels par jour (plafond opérateur qu'aucun réglage en jeu ne peut
+  dépasser), avec journal d'usage (tokens). Le texte généré est traité comme une donnée non
+  fiable : nettoyé, borné, affiché à part, sans aucun effet sur le monde.
+- **Sécurité** : les commandes sont réservées aux administrateurs (`ADMIN_USER_IDS`) ; un
+  personnage « PDG » n'a accès à aucun réglage, secret ou permission ; tout le texte est
+  échappé avant envoi à Telegram.
+
+Variables d'environnement : `WORLD_NOTIFICATIONS` (défaut `true`), `WORLD_AI` (défaut `true`,
+nécessite `ANTHROPIC_API_KEY`), `WORLD_AI_DAILY_CALLS` (défaut `6`, 0 pour couper).
 
 ## Déploiement
 

@@ -41,6 +41,7 @@ export const PANELS = {
   kitchen: { id: "kitchen", name: "Cuisine & vie de bureau", short: "Cuisine", icon: "🍕", color: "#f4a259", area: "kitchen" },
   annexe: { id: "annexe", name: "Annexe — Compta & Entretien", short: "Annexe", icon: "🧾", color: "#9aa5b1", area: "annexe" },
   openspace: { id: "openspace", name: "Plateau & Équipes", short: "Équipes", icon: "👥", color: "#4cc38a", area: "openspace" },
+  madhouse: { id: "madhouse", name: "Bâtiment 0 — The Madhouse", short: "Bâtiment", icon: "🏚️", color: "#6c5ce7" },
 };
 
 export const DEPARTMENTS = {

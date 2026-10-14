@@ -7,8 +7,9 @@ import {
   initLife, advanceLife, lifeForClient, addStory, adoptCat, renameCat, feedCat, petCat, hireIntern,
   revealClue, solveQuest, holdCeremony, nextRound,
 } from "./social.js";
+import { ensureWorld, advanceWorld, applyWorldAction, worldBadge, WorldError, pendingWorldJobs } from "./world/index.js";
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 // Collègues arrivés avec la v3 (nouvelle aile Est).
 const V3_AGENT_IDS = ["mgr-marketing", "designer", "growth", "data", "lawyer", "admin", "hr", "happiness", "intern-vente", "intern-social", "intern-tech"];
@@ -122,6 +123,7 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
 
   log(state, now, "director", "Le QG ouvre ses portes : toute l'équipe est à son poste !", "🎉");
   initLife(state, now);
+  ensureWorld(state, now);
   return state;
 }
 
@@ -184,8 +186,13 @@ export function migrateState(state, now = Date.now()) {
     agent.traits ||= [];
     if (agent.managerId === undefined) agent.managerId = defaultManagerId(state, agent);
   }
+  if (from < 4 && !state.world) {
+    // v4 : l'entreprise découvre qu'elle occupe l'Étage 1 d'un bâtiment qui ne devrait pas exister.
+    log(state, now, "director", "Ton entreprise occupe désormais l'Étage 1 du Bâtiment 0. L'Ascenseur B nous a fait un clin d'œil. Personne n'a aimé ça.", "🏢");
+  }
   state.version = STATE_VERSION;
   initLife(state, now);
+  ensureWorld(state, now);
   return state;
 }
 
@@ -966,6 +973,14 @@ export function publicResult(result) {
 // Point d'entrée unique des actions (utilisé par l'API et le mode démo)
 
 export function applyAction(state, type, payload = {}, now = Date.now()) {
+  if (type.startsWith("world.")) {
+    try {
+      return { public: applyWorldAction(state, type, payload, now) };
+    } catch (err) {
+      if (err instanceof WorldError) throw new OfficeError(err.message);
+      throw err;
+    }
+  }
   switch (type) {
     case "task.create": return createTask(state, payload, now);
     case "task.cancel": return cancelTask(state, payload, now);
@@ -1104,6 +1119,11 @@ export function advance(state, now = Date.now()) {
     changed = true;
   }
 
+  // Le Bâtiment 0 vit à son rythme (cycles de 30 min, rattrapage borné).
+  const world = advanceWorld(state, now);
+  if (world.changed) changed = true;
+  notes.push(...world.notes);
+
   return { notes, changed };
 }
 
@@ -1114,6 +1134,7 @@ export function pendingJobs(state) {
   for (const t of state.tasks) if (t.status === "working" && !t.output) jobs.push({ kind: "task", id: t.id });
   for (const m of state.meetings) if (m.status === "summarizing") jobs.push({ kind: "meeting", id: m.id });
   if (state.director.briefStatus === "writing") jobs.push({ kind: "brief", id: "brief" });
+  jobs.push(...pendingWorldJobs(state.world));
   return jobs;
 }
 
@@ -1129,6 +1150,9 @@ export function toClientState(state) {
     tasks: state.tasks.map((t) => (t.output ? { ...t, output: { kind: t.output.kind, title: t.output.title, summary: t.output.summary } } : t)),
     trash: (state.trash || []).map(({ content, ...doc }) => doc),
     life: lifeForClient(state.life),
+    // Le monde complet (plusieurs centaines de Ko) est servi à la demande, jamais dans le polling.
+    world: undefined,
+    madhouse: worldBadge(state.world),
   };
 }
 

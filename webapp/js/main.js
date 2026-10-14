@@ -248,7 +248,7 @@ async function boot() {
     const deals = (state.deals || []).filter((d) => !d.dismissed && backend.now() - d.foundAt < 86400000).length;
     const round = state.life?.round;
     const openQuests = round && !round.winnerId ? round.quests.filter((q) => q.status === "open").length : 0;
-    const badges = { director: k.review, meeting: live ? "●" : 0, sourcing: deals, annexe: (state.trash || []).length ? "🗑️" : 0, quests: openQuests };
+    const badges = { director: k.review, meeting: live ? "●" : 0, sourcing: deals, annexe: (state.trash || []).length ? "🗑️" : 0, quests: openQuests, madhouse: state.madhouse?.decisions || (state.madhouse?.unread ? "●" : 0) };
     dock.replaceChildren(...DOCK.map((id) => {
       const room = id === "overview" ? { icon: "🗺️", short: "Vue", color: "#7c6cff" } : PANELS[id];
       const active = id === "overview" ? !panels.isOpen : panels.current?.kind === "panel" && panels.current.id === id;

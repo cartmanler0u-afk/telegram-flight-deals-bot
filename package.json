@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node src/index.js",
     "office:dev": "node scripts/office-dev.js",
-    "test": "node --test test/office.test.js"
+    "test": "node --test test/office.test.js test/madhouse.test.js"
   },
   "keywords": [
     "telegram",

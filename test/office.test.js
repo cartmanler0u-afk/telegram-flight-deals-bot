@@ -386,7 +386,7 @@ function v1State() {
 test("migration v1 → v2 : l'entreprise s'agrandit sans rien perdre", async () => {
   const state = migrateState(v1State(), T0 + 1000);
   const byId = Object.fromEntries(state.agents.map((a) => [a.id, a]));
-  assert.equal(state.version, 3);
+  assert.equal(state.version, 4);
   assert.equal(state.agents.length, 38);
   assert.equal(byId.webdev.dept, "tech");
   assert.equal(byId.webdev.managerId, "mgr-tech", "Léo rejoint le studio web de Paul");
@@ -396,7 +396,7 @@ test("migration v1 → v2 : l'entreprise s'agrandit sans rien perdre", async () 
   assert.deepEqual(state.deals, []);
   assert.equal(state.settings.companyName, "Cartman Corp");
   assert.match(state.log.at(-1).text, /s'agrandit : 31 nouveaux collègues/);
-  assert.equal(state.version, 3);
+  assert.equal(state.version, 4);
   assert.ok(state.life.round, "l'élection de l'employé du mois démarre");
   assert.equal(migrateState(state, T0 + 2000).agents.length, 38, "migration idempotente");
 
@@ -592,7 +592,7 @@ test("migration v2 → v3 : l'aile Est ouvre avec 11 nouveaux collègues et troi
   delete state.life;
   applyAction(state, "task.create", { title: "Annonce Vinted", agentId: "vinted" }, T0);
   migrateState(state, T0 + 1000);
-  assert.equal(state.version, 3);
+  assert.equal(state.version, 4);
   assert.equal(state.agents.length, 38);
   assert.match(state.log.at(-1).text, /aile Est : 11 nouveaux collègues/);
   assert.equal(state.tasks[0].agentId, "vinted");
