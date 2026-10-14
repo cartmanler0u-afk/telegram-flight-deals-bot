@@ -81,7 +81,51 @@ const QUOTES = {
     "Ici, on vend, on source, on monte des vidéos… et on survit aux réunions de Victor.",
     "Mon métier ? Je trouve des pépites. Et je les revends plus cher. C'est beau, non ?",
   ],
+  love: [
+    "On est juste collègues. *regarde la caméra* …Très bons collègues.",
+    "Non, on ne déjeune pas ensemble TOUS les jours. Juste les jours ouvrés.",
+    "Josiane a tout deviné avant nous. Josiane devine toujours tout.",
+  ],
+  crush: [
+    "Je lui ai demandé un stylo. J'avais déjà un stylo. J'ai trois stylos.",
+    "Quoi ? Non. Je rougis parce qu'il fait chaud. Il fait toujours chaud quand… bref.",
+  ],
+  hr: [
+    "Victor a renommé mon fichier « Gérard_le_rabat-joie.docx ». Je n'ai rien dit.",
+    "Ma plante est triste. Moi aussi, un peu. Mais on tient bon, elle et moi.",
+    "La boîte à suggestions contient 14 papiers « Virer Gérard ». Tous de la même écriture.",
+  ],
+  karate: [
+    "Ceinture noire. De karaté-bureau, mais ceinture noire quand même.",
+    "Un vrai professionnel est toujours prêt. Même pendant la pause café. SURTOUT pendant la pause café.",
+  ],
+  intern: [
+    "Mon tuteur dit que j'apprends vite. Il a dit ça en me retirant l'accès à l'imprimante.",
+    "J'ai fait 14 cafés. On m'en avait demandé un. Mais je préfère anticiper.",
+    "Le stage, c'est formateur. Par exemple, j'ai appris où ne PAS ranger le chili de Bruno.",
+  ],
+  cat: [
+    "Les chats sont les seuls collègues qui ne font jamais de réunion. Des modèles.",
+    "Pixel a plus de followers que notre compte pro. Je ne sais pas comment le vivre.",
+  ],
+  eotm: [
+    "Je voudrais remercier ma maman, mon tuteur… et la machine à café, surtout.",
+    "Employé du mois. Je vais l'écrire sur ma tasse. Et sur mon CV. Et sur ma tombe.",
+  ],
+  gym: [
+    "Je fais du sport pour pouvoir manger plus de chili. C'est un cercle vertueux.",
+    "Le tapis de course, c'est comme une réunion de Victor : on court, on n'avance pas.",
+  ],
 };
+
+const GYM_LINES = ["Encore 5 minutes… 🥵", "Qui a mis Céline Dion sur l'enceinte ?", "No pain, no gain 💪", "Je fais ça pour les photos de l'été."];
+const RIVAL_LINES = [
+  ["C'est MON tour à la photocopieuse.", "J'étais là AVANT toi."],
+  ["Tu as encore piqué mon agrafeuse ?", "Prouve-le."],
+  ["Belle présentation… pour un stagiaire.", "Je ne suis PAS stagiaire."],
+];
+const COUPLE_LINES = [["Tu viens prendre un café ? ☕", "Avec toi, toujours ❤️"], ["J'ai gardé le dernier cookie pour toi 🍪", "C'est pour ça que je t'aime"], ["On déjeune ensemble ?", "Comme tous les jours 😌"]];
+const CRUSH_LINES = ["Euh… salut ! T'aurais un stylo ? 😳", "J'ai fait trop de café, tu en veux ? (j'en ai fait exprès)", "Jolie… jolie présentation. Ce matin. Voilà. 😳"];
 
 export class LifeDirector {
   constructor(world) {
@@ -180,6 +224,22 @@ export class LifeDirector {
       ["nap", hour > 14 && hour < 17 ? 1.8 : 0.6],
       ["babyfoot", 1.4],
       ["vending", 1],
+      ["couple", 2.2],
+      ["crush", 1.4],
+      ["bff", 1.6],
+      ["rivals", 1.2],
+      ["victorHR", 0.8],
+      ["suggestion", 0.6],
+      ["internCoffee", 1.3],
+      ["internLost", 0.8],
+      ["chili", 0.35],
+      ["karate", 0.8],
+      ["gym", 1.6],
+      ["gaming", 1],
+      ["lounge", 1.4],
+      ["petCat", 2.2],
+      ["feedCats", hour > 11 && hour < 13 ? 2 : 0.4],
+      ["campaign", 0.8],
     ];
     const total = events.reduce((s, [, w]) => s + w, 0);
     let r = Math.random() * total;
@@ -375,6 +435,7 @@ export class LifeDirector {
       stops.push({ spot: { x: seat.x - top.fz * 0.75, z: seat.z + top.fx * 0.75, standing: true, facing: Math.atan2(top.x - (seat.x - top.fz * 0.75), top.z - (seat.z + top.fx * 0.75)) }, onDone: () => this.world.clearMess(seatId) });
     }
     if (this.world.whiteboardText) stops.push({ spot: SPOTS.whiteboard, onDone: () => this.world.eraseWhiteboard() });
+    for (const [key, m] of this.world.floorMess) stops.push({ spot: { x: m.x - 0.8, z: m.z + 0.3, standing: true, facing: Math.PI / 2 }, onDone: () => this.world.clearFloorMess(key) });
     if (!stops.length && !force) {
       const randomSeats = [...this.world.actors.values()].filter((a) => a.home && !a.home.standing).slice(0, 30);
       for (let i = 0; i < 2 && randomSeats.length; i++) {
@@ -484,10 +545,11 @@ export class LifeDirector {
 
   // ------------------------------------------------------------------ évènements déclenchés par le patron
 
-  party() {
+  party(heroId = null) {
     const all = this.available({ exclude: [] });
     if (all.length < 3) return false;
-    const hero = rand(all);
+    const hero = (typeof heroId === "string" && this.world.actors.get(heroId)) || rand(all);
+    if (!all.includes(hero)) all.unshift(hero);
     const heroName = this.name(hero.agentId);
     this.world.showCake(true);
     const spots = [...MEETING_STANDING, ...MEETING_SEATS];
@@ -541,6 +603,8 @@ export class LifeDirector {
   }
 
   dundies() {
+    const champion = this.world.state.life?.hall?.[0]?.agentId;
+    if (champion && this.world.actors.has(champion)) return this.ceremony(champion);
     const agents = this.world.state.agents;
     const best = [...agents].sort((a, b) => (b.stats?.done || 0) - (a.stats?.done || 0))[0];
     if (!best) return false;
@@ -552,6 +616,378 @@ export class LifeDirector {
     }));
     this.log("🏆", `${best.name} est élu·e employé·e du mois (${best.stats?.done || 0} missions livrées) !`, best.id);
     this.interview(best.id, "work", 5000);
+    return true;
+  }
+
+  // ------------------------------------------------------------------ v3 : relations & running gags
+
+  relations(kinds) {
+    return Object.values(this.world.state?.life?.relations || {}).filter((r) => kinds.includes(r.kind));
+  }
+
+  pair(kinds) {
+    const free = new Set(this.available().map((a) => a.agentId));
+    const rels = this.relations(kinds).filter((r) => free.has(r.a) && free.has(r.b));
+    const rel = rels.length ? rand(rels) : null;
+    if (!rel) return null;
+    return { rel, a: this.world.actors.get(rel.from && rel.from === rel.b ? rel.b : rel.a), b: this.world.actors.get(rel.from && rel.from === rel.b ? rel.a : rel.b) };
+  }
+
+  ev_couple(forced = null) {
+    const p = forced || this.pair(["couple"]);
+    if (!p?.a || !p?.b) return false;
+    const [l1, l2] = rand(COUPLE_LINES);
+    const spots = rand([[SPOTS.coffee[0], SPOTS.coffee[1]], [SPOTS.lounge.sofa[0], SPOTS.lounge.sofa[1]], [SPOTS.coffee[2], SPOTS.coffee[3]]]);
+    this.hold(p.a, 30000);
+    this.hold(p.b, 30000);
+    p.a.trip.push({ spot: { ...spots[0], facing: spots[0].facing }, activity: spots[0].standing ? "talk" : "relax", dwell: 14000, onArrive: () => this.later(500, () => p.a.person.say(l1, 3000)) });
+    p.b.trip.push({ spot: spots[1], activity: spots[1].standing ? "hug" : "relax", dwell: 14000, onArrive: () => this.later(3600, () => p.b.person.say(l2, 3000)) });
+    const witness = this.available().find((x) => x !== p.a && x !== p.b);
+    if (witness && chance(0.5)) this.later(9000, () => witness.person.say(rand(["Ils sont trop mignons 🥹", "Bon, on travaille ici 🙄", "Trouvez-vous une salle de réunion…"]), 2600, 0));
+    this.log("❤️", `${this.name(p.a.agentId)} et ${this.name(p.b.agentId)} prennent leur pause ensemble (encore).`, p.a.agentId);
+    if (chance(0.5)) this.interview(rand([p.a, p.b]).agentId, "love", 16000);
+    return true;
+  }
+
+  ev_crush(forced = null) {
+    const p = forced || this.pair(["crush"]);
+    if (!p?.a || !p?.b || !p.b.home || p.b.home.standing) return false;
+    this.hold(p.a, 20000);
+    const fx = Math.sin(p.b.home.facing);
+    const fz = Math.cos(p.b.home.facing);
+    const spot = { x: p.b.home.x + fz * 0.8, z: p.b.home.z - fx * 0.8, standing: true, facing: Math.atan2(-fz, fx) };
+    p.a.trip.push({
+      spot,
+      activity: "talk",
+      dwell: 6000,
+      onArrive: () => {
+        p.a.person.say(rand(CRUSH_LINES), 3200);
+        this.later(3400, () => p.b.person.say(rand(["Bien sûr ! 😊", "Oh, merci, c'est gentil !", "…Ça va, toi ?"]), 2600));
+      },
+    });
+    this.log("😳", `${this.name(p.a.agentId)} a trouvé une excuse pour passer au bureau de ${this.name(p.b.agentId)}.`, p.a.agentId);
+    this.film(p.b.home.x, p.b.home.z);
+    this.interview(p.a.agentId, "crush", 9000);
+    return true;
+  }
+
+  ev_bff() {
+    const p = this.pair(["bff", "ami"]);
+    if (!p?.a || !p?.b) return false;
+    if (chance(0.5)) {
+      p.a.trip.push({ spot: SPOTS.babyfoot[0], activity: "babyfoot", dwell: 11000, onArrive: () => p.a.person.say("Revanche ! 😤", 2200, 0) });
+      p.b.trip.push({ spot: SPOTS.babyfoot[1], activity: "babyfoot", dwell: 11000, onDone: () => p.b.person.say("GAMELLE ! 🙌", 2200, 0) });
+      this.log("⚽", `Baby-foot entre potes : ${this.name(p.a.agentId)} contre ${this.name(p.b.agentId)}.`, p.a.agentId);
+    } else {
+      p.a.trip.push({ spot: SPOTS.lounge.sofa[3], activity: "game", dwell: 15000, onArrive: () => p.a.person.say("Une petite partie ? 🎮", 2400, 0) });
+      p.b.trip.push({ spot: SPOTS.lounge.sofa[4], activity: "game", dwell: 15000, onDone: () => p.b.person.say(rand(["GG !", "Tu triches !!", "Encore une !"]), 2400, 0) });
+      this.log("🎮", `${this.name(p.a.agentId)} et ${this.name(p.b.agentId)} jouent à la console en salle de repos.`, p.a.agentId);
+    }
+    return true;
+  }
+
+  ev_rivals() {
+    const p = this.pair(["rival", "ex"]);
+    if (!p?.a || !p?.b) return false;
+    const [l1, l2] = rand(RIVAL_LINES);
+    this.hold(p.a, 20000);
+    this.hold(p.b, 20000);
+    p.a.trip.push({ spot: SPOTS.copier, activity: "talk", dwell: 8000, onArrive: () => this.later(400, () => p.a.person.say(l1, 3000)) });
+    p.b.trip.push({ spot: { x: SPOTS.copier.x - 0.9, z: SPOTS.copier.z + 0.6, facing: 2.2, standing: true }, activity: "talk", dwell: 8000, onArrive: () => this.later(3500, () => p.b.person.say(l2, 3000)) });
+    this.log("⚡", `${this.name(p.a.agentId)} et ${this.name(p.b.agentId)} se disputent la photocopieuse.`, p.a.agentId);
+    this.film(SPOTS.copier.x, SPOTS.copier.z);
+    return true;
+  }
+
+  ev_victorHR() {
+    const victor = this.world.actors.get("director");
+    const hr = [...this.world.actors.values()].find((a) => this.agent(a.agentId)?.role === "hr");
+    if (!victor || !hr || victor.trip.length || victor.meetingSeat) return false;
+    this.hold(victor, 25000);
+    victor.trip.push({
+      spot: SPOTS.hrVisit,
+      activity: "talk",
+      dwell: 7000,
+      onArrive: () => {
+        victor.person.say(rand([`${this.name(hr.agentId)}. Pourquoi tu es comme ça ?`, "Je passais juste vérifier que tu étais toujours là. Dommage.", "Si un jour tu démissionnes, je serai le premier à fêter ça. Professionnellement."]), 3500);
+        this.later(3800, () => hr.person.say("…Bonjour Victor.", 2500));
+      },
+    });
+    this.log("👔", `${this.name("director")} est passé au bureau RH pour embêter ${this.name(hr.agentId)}.`, "director");
+    this.film(SPOTS.hrVisit.x, SPOTS.hrVisit.z);
+    this.interview(hr.agentId, "hr", 12000);
+    return true;
+  }
+
+  ev_suggestion() {
+    const actor = rand(this.available());
+    if (!actor) return false;
+    const victor = actor.agentId === "director";
+    actor.trip.push({ spot: SPOTS.suggestionBox, activity: "drop", dwell: 2500, onArrive: () => actor.person.say(victor ? "Suggestion : virer Gérard. Encore. 📝" : rand(["Suggestion : plus de chats 🐈", "Suggestion : un 2e micro-ondes", "Suggestion : interdire le poisson au micro-ondes"]), 3000, 0) });
+    return true;
+  }
+
+  ev_internCoffee(force = false) {
+    const interns = this.available().filter((a) => this.agent(a.agentId)?.role === "intern");
+    const intern = rand(interns);
+    if (!intern) return false;
+    const clients = this.available().filter((a) => a !== intern && a.home && !a.home.standing).slice(0, 3);
+    this.hold(intern, 60000);
+    intern.trip.push({ spot: rand(SPOTS.coffee), activity: "coffee", dwell: 4000, onArrive: () => intern.person.say(force ? "Tournée de cafés pour tout le monde ! ☕" : "Je fais une tournée de cafés ☕", 2500) });
+    clients.forEach((c) => {
+      const fx = Math.sin(c.home.facing);
+      const fz = Math.cos(c.home.facing);
+      intern.trip.push({
+        spot: { x: c.home.x + fz * 0.75, z: c.home.z - fx * 0.75, standing: true, facing: Math.atan2(-fz, fx) },
+        activity: "drop",
+        dwell: 1800,
+        onArrive: () => this.later(600, () => c.person.say(rand(["Merci ! …j'avais demandé un latte 😐", "Il est froid.", "Oh, c'est gentil 🥹", "C'est du décaf ?!"]), 2400, 0)),
+      });
+    });
+    this.log("☕", `${this.name(intern.agentId)}, stagiaire, fait la tournée des cafés (personne n'a la bonne commande).`, intern.agentId);
+    if (chance(0.5)) this.interview(intern.agentId, "intern", 20000);
+    return true;
+  }
+
+  ev_internLost() {
+    const intern = rand(this.available().filter((a) => this.agent(a.agentId)?.role === "intern"));
+    if (!intern) return false;
+    const spot = rand([SPOTS.gym.weights, SPOTS.libraryDrop, SPOTS.lounge.tv, SPOTS.hrVisit, SPOTS.directorVisit]);
+    intern.trip.push({ spot, activity: "phone", dwell: 5000, onArrive: () => intern.person.say(rand(["C'est où la salle de conf' ? 🙃", "Je crois que je suis perdu…", "Quelqu'un a vu mon tuteur ?"]), 2800, 0) });
+    return true;
+  }
+
+  ev_chili(force = false) {
+    const bruno = [...this.world.actors.values()].find((a) => this.agent(a.agentId)?.role === "accountant");
+    if (!bruno || (!force && (bruno.trip.length || bruno.meetingSeat))) return false;
+    bruno.trip.length = 0;
+    this.hold(bruno, 40000);
+    bruno.trip.push(
+      { spot: SPOTS.microwave, activity: "idle", dwell: 4000, onArrive: () => bruno.person.say("Mon chili maison 🌶️ (recette secrète)", 2600) },
+      {
+        spot: { x: -16.6, z: 7.6, facing: 0.4, standing: true },
+        activity: "shock",
+        dwell: 6000,
+        onArrive: () => {
+          bruno.person.say("NOOON ! MON CHILI !!! 😭", 3500, 2);
+          this.world.spillChili(-16.4, 8.2);
+          this.world.lastIncidentAt = Date.now();
+          const near = this.available().filter((a) => a !== bruno).slice(0, 2);
+          near.forEach((n, i) => this.later(1500 + i * 1200, () => n.person.say(rand(["Encore ?!", "Le compteur repart à zéro…", "Ça sent bon pourtant"]), 2400, 0)));
+        },
+      },
+      { spot: SPOTS.closet, activity: "idle", dwell: 1500, onArrive: () => bruno.person.say("Je vais chercher la serpillière…", 2200, 0) },
+    );
+    this.log("🌶️", `${this.name(bruno.agentId)} a renversé son chili sur la moquette. Le panneau « jours sans incident » repart à zéro.`, bruno.agentId);
+    this.film(-16.4, 8.2);
+    this.interview(bruno.agentId, "food", 14000);
+    this.later(20000, () => this.ev_clean(true));
+    return true;
+  }
+
+  ev_karate(force = false) {
+    const sensei = this.world.actors.get("deputy") || this.pick(this.available(), "zealous");
+    if (!sensei || (!force && (sensei.trip.length || sensei.meetingSeat))) return false;
+    this.hold(sensei, 30000);
+    sensei.trip.push({ spot: SPOTS.gym.dojo, activity: "karate", dwell: 14000, onArrive: () => sensei.person.say("HI-YAH ! 🥋", 2200) });
+    const watcher = this.available().find((a) => a !== sensei);
+    if (watcher) this.later(5000, () => watcher.trip.push({ spot: { x: SPOTS.gym.dojo.x - 1.7, z: SPOTS.gym.dojo.z + 0.8, facing: 1.2, standing: true }, activity: "idle", dwell: 6000, onArrive: () => watcher.person.say("…Il fait ça tous les midis ?", 2500, 0) }));
+    this.log("🥋", `${this.name(sensei.agentId)} s'entraîne au karaté dans la salle de sport. Personne ne lui a demandé.`, sensei.agentId);
+    this.film(SPOTS.gym.dojo.x, SPOTS.gym.dojo.z);
+    this.interview(sensei.agentId, "karate", 9000);
+    return true;
+  }
+
+  ev_gym(actor = null) {
+    actor ||= this.pick(this.available(), chance(0.5) ? "calm" : "party");
+    if (!actor) return false;
+    const traits = this.agent(actor.agentId)?.traits || [];
+    const [spot, activity] = traits.includes("calm") ? [rand(SPOTS.gym.yoga), "yoga"] : rand([[rand(SPOTS.gym.treadmill), "run"], [SPOTS.gym.bag, "punch"], [SPOTS.gym.weights, "lift"]]);
+    actor.trip.push({ spot, activity, dwell: 14000, onArrive: () => actor.person.say(rand(GYM_LINES), 2400, 0) });
+    if (chance(0.2)) this.interview(actor.agentId, "gym", 9000);
+    return true;
+  }
+
+  gymClass() {
+    const crowd = this.available().slice(0, 3);
+    if (!crowd.length) return false;
+    const coach = crowd[0];
+    coach.person.say("Cours de yoga dans 1 minute ! 🧘", 2600);
+    crowd.forEach((a, i) => {
+      this.hold(a, 30000);
+      a.trip.push({ spot: SPOTS.gym.yoga[i % 3], activity: "yoga", dwell: 18000 });
+    });
+    this.log("🧘", `Cours de yoga improvisé à la salle de sport (${crowd.length} participants).`, coach.agentId);
+    this.film(31.4, 14.6);
+    return true;
+  }
+
+  ev_gaming() {
+    const pool = this.available();
+    const a = this.pick(pool, "nerd");
+    const b = a && this.pick(pool.filter((x) => x !== a), "nerd");
+    if (!a || !b) return false;
+    a.trip.push({ spot: SPOTS.lounge.sofa[3], activity: "game", dwell: 16000, onArrive: () => a.person.say("Juste une partie, promis 🎮", 2400, 0) });
+    b.trip.push({ spot: SPOTS.lounge.sofa[4], activity: "game", dwell: 16000, onDone: () => b.person.say(rand(["GG !", "Lag !! C'est le wifi !", "Revanche à midi."]), 2400, 0) });
+    this.log("🎮", `${this.name(a.agentId)} et ${this.name(b.agentId)} « testent la console » de la salle de repos.`, a.agentId);
+    return true;
+  }
+
+  ev_lounge() {
+    const actor = this.pick(this.available(), "lazy");
+    if (!actor) return false;
+    const spot = rand([...SPOTS.lounge.sofa.slice(0, 3), ...SPOTS.lounge.beanbag]);
+    actor.trip.push({ spot, activity: "relax", dwell: 15000, onArrive: () => actor.person.say(rand(["Pause bien méritée 😌", "Je réfléchis. Les yeux fermés.", "Cinq minutes. Promis."]), 2400, 0) });
+    return true;
+  }
+
+  ev_petCat() {
+    const actor = this.pick(this.available(), "catlover");
+    if (!actor || !this.world.cats) return false;
+    const cat = this.world.cats.petBy(actor);
+    if (!cat) return false;
+    if (this.has(actor, "catlover") && chance(0.4)) this.interview(actor.agentId, "cat", 8000);
+    return true;
+  }
+
+  catTime() {
+    const crowd = this.available().slice(0, 4);
+    if (!crowd.length || !this.world.cats) return false;
+    let n = 0;
+    for (const a of crowd) if (this.world.cats.petBy(a)) n += 1;
+    if (!n) return false;
+    this.log("🐈", `Pause câlins générale en salle de repos (${n} collègues, 0 productivité).`);
+    this.film(35.5, -1.5);
+    return true;
+  }
+
+  ev_feedCats() {
+    const feeder = [...this.world.actors.values()].find((a) => this.agent(a.agentId)?.role === "happiness" && !a.trip.length && !a.meetingSeat);
+    if (!feeder || !this.world.cats) return false;
+    feeder.trip.push({
+      spot: SPOTS.lounge.bowls,
+      activity: "drop",
+      dwell: 3500,
+      onArrive: () => {
+        feeder.person.say("À table les chats ! 🐟", 2600);
+        let i = 0;
+        for (const cat of this.world.cats.cats.values()) {
+          if (this.world.cats.isHidden(cat.id)) continue;
+          this.world.cats.go(cat, { x: 37.6 + (i % 3) * 0.45, z: 3.0, facing: 0 }, { pose: "sit", speed: 2.2, dwell: 9000 });
+          i += 1;
+        }
+      },
+    });
+    this.log("🐟", `${this.name(feeder.agentId)} nourrit les chats. Ils font semblant de ne pas avoir mangé depuis trois jours.`, feeder.agentId);
+    return true;
+  }
+
+  ev_campaign() {
+    const round = this.world.state?.life?.round;
+    if (!round || round.winnerId) return false;
+    const nominee = this.world.actors.get(rand(round.nominees));
+    if (!nominee || nominee.trip.length || nominee.meetingSeat) return false;
+    nominee.trip.push({ spot: SPOTS.eotm, activity: "talk", dwell: 6000, onArrive: () => nominee.person.say(rand(["Je mérite ce titre, non ? 🏆", "Employé du mois… ça sonne bien avec mon prénom.", "J'ai déjà préparé mon discours."]), 3000) });
+    return true;
+  }
+
+  // Réactions visuelles aux potins du moteur (relations, anniversaires, incidents…).
+  onStory(story) {
+    const [a, b] = (story.ids || []).map((id) => this.world.actors.get(id));
+    switch (story.kind) {
+      case "birthday":
+        this.later(3000, () => this.party(story.ids[0]));
+        break;
+      case "couple":
+      case "reconcile":
+        if (a && b) this.ev_couple({ a, b });
+        break;
+      case "crush":
+        a?.person.say("😳", 2500, 0);
+        break;
+      case "breakup":
+        a?.person.say("…", 2500, 0);
+        b?.person.say("Ça va. Tout va bien. 🙂", 2600, 0);
+        break;
+      case "rival":
+      case "dispute":
+        a?.person.say("Hmpf. 😤", 2400, 0);
+        b?.person.say("Pfff…", 2400, 0);
+        break;
+      case "peace":
+        if (a && b) {
+          a.person.say("Paix ? 🤝", 2400);
+          b.person.say("Paix. 🕊️", 2400);
+        }
+        break;
+      case "incident":
+        if (story.gag === "chili") this.ev_chili(true);
+        else if (story.gag === "printer") this.ev_printer();
+        else this.world.lastIncidentAt = Date.now();
+        break;
+      case "intern":
+        a?.person.say("Oups… 😅", 2400, 0);
+        break;
+      case "victor":
+        this.ev_victorHR();
+        break;
+      case "round":
+        (story.ids || []).forEach((id, i) => this.later(1000 + i * 1500, () => this.world.actors.get(id)?.person.say(rand(["Je suis nominé·e ?! 😱", "Enfin la reconnaissance !", "Qui a voté pour moi ?"]), 3000)));
+        break;
+      case "quest":
+        a?.person.say("⭐ Merci patron !", 2600, 2);
+        break;
+      case "cdi":
+        if (a) a.trip.push({ spot: { ...a.home, standing: true }, activity: "dance", dwell: 7000, onArrive: () => a.person.say("CDI !!! 🎉", 3000, 2) });
+        break;
+      default:
+    }
+  }
+
+  // Cérémonie de l'employé du mois devant le totem de l'entrée.
+  ceremony(winnerId) {
+    const winner = this.world.actors.get(winnerId);
+    if (!winner) return false;
+    const stage = { x: SPOTS.eotm.x, z: SPOTS.eotm.z - 0.2, facing: 0, standing: true };
+    const hurry = (a) => {
+      a.person.speed = a.person.baseSpeed * 1.8;
+    };
+    const calm = (a) => {
+      a.person.speed = a.person.baseSpeed;
+    };
+    winner.trip.length = 0;
+    this.hold(winner, 45000);
+    hurry(winner);
+    winner.trip.push({
+      spot: stage,
+      activity: "wave",
+      dwell: 16000,
+      onArrive: () => {
+        calm(winner);
+        this.world.confetti(stage.x, stage.z + 1);
+        this.later(1200, () => winner.person.say(rand(QUOTES.eotm), 5500, 2));
+      },
+    });
+    const crowd = this.available({ exclude: [winnerId] }).slice(0, 14);
+    crowd.forEach((a, i) => {
+      this.hold(a, 40000);
+      hurry(a);
+      const row = Math.floor(i / 7);
+      const col = (i % 7) - 3;
+      a.trip.push({
+        spot: { x: stage.x + col * 0.85, z: stage.z + 1.2 + row * 0.85, facing: Math.PI, standing: true },
+        activity: "clap",
+        dwell: 16000,
+        onArrive: () => {
+          calm(a);
+          if (i < 3) a.person.say(rand(["Bravo !! 👏", "Discours ! Discours !", "C'était truqué (non)"]), 2600, 0);
+        },
+      });
+    });
+    this.world.giveTrophy(winnerId);
+    this.log("🏆", `Cérémonie : ${this.name(winnerId)} reçoit le trophée d'employé du mois devant toute l'équipe !`, winnerId);
+    this.film(stage.x, stage.z + 1.5);
+    this.interview(winnerId, "eotm", 14000);
     return true;
   }
 

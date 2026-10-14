@@ -6,14 +6,19 @@ export const ROOMS = {
   director: { id: "director", name: "Bureau du Directeur", icon: "👔", color: "#e0b354", panel: "director" },
   meeting: { id: "meeting", name: "Salle de conférence", icon: "🗒️", color: "#5aa9e6", panel: "meeting" },
   library: { id: "library", name: "Archives", icon: "📚", color: "#c08552", panel: "library" },
-  studio: { id: "studio", name: "Studio Web & Tech", icon: "🌐", color: "#8b6cff", panel: "studio" },
-  montage: { id: "montage", name: "Studio Montage", icon: "🎬", color: "#ff5c8a", panel: "social" },
-  createurs: { id: "createurs", name: "Pôle Créateurs", icon: "💎", color: "#c77dff", panel: "createurs" },
+  studio: { id: "studio", name: "Studio Web & Tech", tag: "Studio Web", icon: "🌐", color: "#8b6cff", panel: "studio" },
+  montage: { id: "montage", name: "Studio Montage", tag: "Montage", icon: "🎬", color: "#ff5c8a", panel: "social" },
+  createurs: { id: "createurs", name: "Pôle Créateurs", tag: "Créateurs", icon: "💎", color: "#c77dff", panel: "createurs" },
   kitchen: { id: "kitchen", name: "Cuisine", icon: "🍕", color: "#f4a259", panel: "kitchen" },
   annexe: { id: "annexe", name: "Annexe", icon: "🧾", color: "#9aa5b1", panel: "annexe" },
   reception: { id: "reception", name: "Accueil", icon: "📅", color: "#ef7fa6", panel: "reception" },
   photo: { id: "photo", name: "Studio Photo", icon: "📸", color: "#4cc9f0", panel: "vente" },
   warehouse: { id: "warehouse", name: "Entrepôt", icon: "📦", color: "#c8a165", panel: "vente" },
+  marketing: { id: "marketing", name: "Studio Marketing", tag: "Marketing", icon: "🎨", color: "#ff8a5b", panel: "marketing" },
+  legal: { id: "legal", name: "Juridique & Admin", tag: "Juridique", icon: "⚖️", color: "#8fa3bf", panel: "legal" },
+  lounge: { id: "lounge", name: "Salle de repos & chats", tag: "Salle de repos", icon: "🐈", color: "#ffb4a2", panel: "lounge" },
+  gym: { id: "gym", name: "Salle de sport", icon: "🏋️", color: "#57cc99", panel: "lounge" },
+  hr: { id: "hr", name: "Bureau RH", icon: "🤝", color: "#f28482", panel: "rh" },
   openspace: { id: "openspace", name: "Plateau", icon: "🏢", color: "#4cc38a", panel: "openspace" },
 };
 
@@ -25,9 +30,14 @@ export const PANELS = {
   social: { id: "social", name: "Social & Contenu", short: "Social", icon: "📱", color: "#ff5c8a", dept: "social", area: "montage" },
   studio: { id: "studio", name: "Studio Web & Tech", short: "Web", icon: "🌐", color: "#8b6cff", dept: "tech", area: "studio" },
   createurs: { id: "createurs", name: "Pôle Créateurs", short: "Créateurs", icon: "💎", color: "#c77dff", dept: "createurs", area: "createurs" },
+  marketing: { id: "marketing", name: "Marketing & Création", short: "Marketing", icon: "🎨", color: "#ff8a5b", dept: "marketing", area: "marketing" },
+  legal: { id: "legal", name: "Juridique & Admin", short: "Juridique", icon: "⚖️", color: "#8fa3bf", dept: "juridique", area: "legal" },
   library: { id: "library", name: "Archives & Bibliothèque", short: "Archives", icon: "📚", color: "#c08552", area: "library" },
   reception: { id: "reception", name: "Accueil & Planning", short: "Planning", icon: "📅", color: "#ef7fa6", area: "reception" },
   meeting: { id: "meeting", name: "Salle de conférence", short: "Réunion", icon: "🗒️", color: "#5aa9e6", area: "meeting" },
+  quests: { id: "quests", name: "Employé du mois", short: "Quêtes", icon: "🏆", color: "#f7c948", area: "hr" },
+  rh: { id: "rh", name: "RH & Vie d'équipe", short: "RH", icon: "🤝", color: "#f28482", dept: "rh", area: "hr" },
+  lounge: { id: "lounge", name: "Salle de repos & chats", short: "Repos", icon: "🐈", color: "#ffb4a2", area: "lounge" },
   kitchen: { id: "kitchen", name: "Cuisine & vie de bureau", short: "Cuisine", icon: "🍕", color: "#f4a259", area: "kitchen" },
   annexe: { id: "annexe", name: "Annexe — Compta & Entretien", short: "Annexe", icon: "🧾", color: "#9aa5b1", area: "annexe" },
   openspace: { id: "openspace", name: "Plateau & Équipes", short: "Équipes", icon: "👥", color: "#4cc38a", area: "openspace" },
@@ -40,6 +50,9 @@ export const DEPARTMENTS = {
   social: { id: "social", label: "Social & Contenu", icon: "📱", color: "#ff5c8a", summary: "Snapchat, canaux Telegram, montage TikTok et rédaction." },
   tech: { id: "tech", label: "Web & Tech", icon: "🌐", color: "#8b6cff", summary: "Sites web, bots et automatisations." },
   createurs: { id: "createurs", label: "Pôle Créateurs (OFM)", icon: "💎", color: "#c77dff", summary: "Gestion de créatrices et créateurs de contenu — lancement en préparation." },
+  marketing: { id: "marketing", label: "Marketing & Création", icon: "🎨", color: "#ff8a5b", summary: "Visuels, publicité, croissance et chiffres : faire connaître et vendre plus." },
+  juridique: { id: "juridique", label: "Juridique & Admin", icon: "⚖️", color: "#8fa3bf", summary: "Statuts, CGV, contrats, démarches : être carré et dormir tranquille." },
+  rh: { id: "rh", label: "RH & Vie d'équipe", icon: "🤝", color: "#f28482", summary: "Recrutement, stagiaires, ambiance, chats… et élection de l'employé du mois." },
   organisation: { id: "organisation", label: "Organisation", icon: "🗂️", color: "#4cc38a", summary: "Accueil, planning, archives, comptes rendus, compta et entretien." },
 };
 
@@ -65,6 +78,13 @@ export const TASK_TYPES = {
   video: { label: "Vidéo TikTok", icon: "🎬", durationMs: 30000 },
   content: { label: "Rédaction", icon: "✍️", durationMs: 24000 },
   talent: { label: "Pôle Créateurs", icon: "💎", durationMs: 26000 },
+  design: { label: "Visuel & DA", icon: "🎨", durationMs: 26000 },
+  ads: { label: "Campagne pub", icon: "📈", durationMs: 26000 },
+  data: { label: "Analyse data", icon: "📊", durationMs: 24000 },
+  legal: { label: "Juridique", icon: "⚖️", durationMs: 28000 },
+  admin: { label: "Administratif", icon: "🗂️", durationMs: 20000 },
+  hr: { label: "RH & recrutement", icon: "🤝", durationMs: 22000 },
+  events: { label: "Vie d'équipe", icon: "🎈", durationMs: 18000 },
   general: { label: "Mission", icon: "🧠", durationMs: 22000 },
 };
 
@@ -88,6 +108,11 @@ export const DOC_KINDS = {
   deals: { label: "Bons plans", icon: "🔎" },
   finance: { label: "Finance", icon: "🧮" },
   code: { label: "Script", icon: "🤖" },
+  visual: { label: "Brief visuel", icon: "🎨" },
+  campaign: { label: "Campagne pub", icon: "📈" },
+  dashboard: { label: "Tableau de bord", icon: "📊" },
+  legal: { label: "Juridique", icon: "⚖️" },
+  hr: { label: "RH", icon: "🤝" },
   file: { label: "Fichier", icon: "📄" },
   link: { label: "Lien", icon: "🔗" },
 };
@@ -116,6 +141,13 @@ export const ROLES = {
   scribe: { label: "Greffier (prise de notes)", taskType: "notes", dept: "organisation", icon: "🗒️", hireable: true, accessory: "notepad", skills: "Prend les notes en réunion, rédige comptes rendus et synthèses." },
   accountant: { label: "Comptable", taskType: "finance", dept: "organisation", icon: "🧮", hireable: true, accessory: "glasses", skills: "Marges, chiffre d'affaires, frais, budget et trésorerie." },
   cleaner: { label: "Agent d'entretien", taskType: "cleaning", dept: "organisation", icon: "🧹", hireable: true, accessory: "mop", skills: "Fait le ménage du QG : vide la corbeille, archive le vieux journal, nettoie le cache." },
+  designer: { label: "Graphiste & DA", taskType: "design", dept: "marketing", icon: "🎨", hireable: true, accessory: "pen", skills: "Logos, miniatures, bannières, visuels de pub et chartes graphiques : des briefs visuels précis, prêts à produire." },
+  growth: { label: "Growth & publicité", taskType: "ads", dept: "marketing", icon: "📈", hireable: true, accessory: "phone", skills: "Campagnes Meta, TikTok et Snap Ads : ciblage, budgets, accroches, tests A/B et tunnels de vente." },
+  data: { label: "Analyste data", taskType: "data", dept: "marketing", icon: "📊", hireable: true, accessory: "glasses", skills: "Tableaux de bord, indicateurs de ventes et de réseaux, analyses de performance et prévisions." },
+  lawyer: { label: "Juriste", taskType: "legal", dept: "juridique", icon: "⚖️", hireable: true, accessory: "tie", skills: "Statuts, CGV, mentions légales, RGPD, contrats et propriété intellectuelle. Signale toujours ce qui doit être validé par un pro." },
+  admin: { label: "Assistant·e administratif·ve", taskType: "admin", dept: "juridique", icon: "🗂️", hireable: true, accessory: "notepad", skills: "Démarches (URSSAF, impôts, banque, assurances), courriers, relances et classement administratif." },
+  hr: { label: "Responsable RH", taskType: "hr", dept: "rh", icon: "🤝", hireable: true, accessory: "clipboard", skills: "Fiches de poste, recrutement de freelances, intégration des stagiaires, entretiens et médiation." },
+  happiness: { label: "Chief Happiness Officer", taskType: "events", dept: "rh", icon: "🎈", hireable: true, accessory: "none", skills: "Ambiance, événements d'équipe, bien-être… et responsable officielle des chats du bureau." },
   intern: { label: "Stagiaire", taskType: "general", dept: "organisation", icon: "🧃", hireable: true, accessory: "cap", skills: "Petites missions, recherches, cafés. Enthousiasme illimité, expérience limitée." },
 };
 
@@ -150,9 +182,29 @@ export const DEFAULT_AGENTS = [
   { id: "webdev", name: "Léo", role: "webdev", traits: ["nerd", "prankster"], look: look("#f0c9a8", "#e0b04a", "spiky", "#7353e8", "#33364a") },
   { id: "automation", name: "Max", role: "automation", traits: ["nerd"], look: look("#c68d6a", "#1f1a17", "short", "#3a86ff", "#212529") },
   { id: "talent", name: "Chloé", role: "talent", traits: ["hustler", "party"], look: look("#f3d0b5", "#2a1a12", "long", "#c77dff", "#2e2a3a") },
+  { id: "mgr-marketing", name: "Margaux", role: "manager", dept: "marketing", traits: ["showoff", "hustler"], look: look("#f3d0b5", "#e0b04a", "bun", "#ff8a5b", "#2b2f3a") },
+  { id: "designer", name: "Nina", role: "designer", traits: ["artist", "nightowl"], look: look("#a8735a", "#1f1a17", "curly", "#ffd166", "#30343f") },
+  { id: "growth", name: "Malik", role: "growth", traits: ["hustler", "foodie"], look: look("#7d513b", "#1f1a17", "short", "#3a86ff", "#212529") },
+  { id: "data", name: "Rose", role: "data", traits: ["meticulous", "shy"], look: look("#f0c9a8", "#7a3e1d", "long", "#6d597a", "#2b2f3a") },
+  { id: "lawyer", name: "Sandrine", role: "lawyer", traits: ["meticulous", "grumpy"], look: look("#e8b796", "#3b2a20", "bun", "#22223b", "#1a1b26") },
+  { id: "admin", name: "Gilles", role: "admin", traits: ["calm", "zealous"], look: look("#f1c6a5", "#9aa0a6", "bald", "#8d99ae", "#33364a") },
+  { id: "hr", name: "Gérard", role: "hr", traits: ["kind", "shy"], look: look("#f0c9a8", "#5a4632", "short", "#b8b08d", "#4a4e69") },
+  { id: "happiness", name: "Amandine", role: "happiness", traits: ["party", "catlover"], look: look("#f3d0b5", "#b5452f", "long", "#ff8fab", "#2e2a3a") },
+  { id: "intern-vente", name: "Lina", role: "intern", dept: "vente", traits: ["clumsy", "party"], look: look("#c68d6a", "#1f1a17", "long", "#06d6a0", "#1d3557") },
+  { id: "intern-social", name: "Théo", role: "intern", dept: "social", traits: ["hipster", "nightowl"], look: look("#f3d0b5", "#e0b04a", "curly", "#ef476f", "#30343f") },
+  { id: "intern-tech", name: "Sacha", role: "intern", dept: "tech", traits: ["nerd", "clumsy"], look: look("#e8b796", "#2d3e8f", "short", "#118ab2", "#212529") },
 ];
 
-export const TRAITS = ["prankster", "foodie", "gossip", "party", "lazy", "nerd", "kind", "hustler", "artist", "calm", "meticulous", "shy"];
+export const TRAITS = ["prankster", "foodie", "gossip", "party", "lazy", "nerd", "kind", "hustler", "artist", "calm", "meticulous", "shy", "catlover", "clumsy", "nightowl", "traveler"];
+
+// Libellés des traits de caractère (fiches employés, quêtes de médiation).
+export const TRAIT_LABELS = {
+  prankster: "farceur", foodie: "gourmand", gossip: "commère", party: "fêtard", lazy: "flemmard", nerd: "geek",
+  kind: "bienveillant", hustler: "charbonneur", artist: "artiste", calm: "zen", meticulous: "méticuleux", shy: "timide",
+  boss: "patron", showoff: "m'as-tu-vu", zealous: "zélé", target: "souffre-douleur", traveler: "globe-trotteur",
+  strong: "costaud", nightowl: "oiseau de nuit", hipster: "hipster", grumpy: "grognon", cleaner: "fée du logis",
+  catlover: "fan de chats", clumsy: "maladroit",
+};
 
 export const HIRE_LOOKS = {
   skin: ["#f3d0b5", "#e8b796", "#d9a882", "#c68d6a", "#a8735a", "#7d513b"],

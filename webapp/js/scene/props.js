@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { AREAS, WALLS, WALL_H, ROOM_DESKS, MEETING_SEATS, PODS, BOUNDS, BINS } from "./layout.js";
+import { AREAS, WALLS, WALL_H, ROOM_DESKS, MEETING_SEATS, PODS, BOUNDS, BINS, INTERN_POD, EOTM_TOTEM } from "./layout.js";
 import { mat } from "./people.js";
 
 export const MONITOR_IDLE = new THREE.Color("#2b3150");
@@ -353,6 +353,17 @@ function wallPieces(from, to, gaps = []) {
 function partition(parent, nav, wall) {
   const { horizontal, fixed, pieces, gaps } = wallPieces(wall.from, wall.to, wall.gaps);
   const place = (m, along, y) => (horizontal ? m.position.set(along, y, fixed) : m.position.set(fixed, y, along));
+  if (wall.kind === "solid") {
+    // Mur plein (entre l'entrepôt et la salle de sport).
+    for (const [p0, p1] of pieces) {
+      const len = p1 - p0;
+      place(addBox(parent, horizontal ? len : 0.16, WALL_H, horizontal ? 0.16 : len, M.wall, 0, 0, 0), (p0 + p1) / 2, WALL_H / 2);
+      place(addBox(parent, horizontal ? len : 0.18, 0.12, horizontal ? 0.18 : len, M.wallTrim, 0, 0, 0, { cast: false }), (p0 + p1) / 2, 0.06);
+      if (horizontal) nav.blockRect(p0, fixed - 0.08, p1, fixed + 0.08, 0.18);
+      else nav.blockRect(fixed - 0.08, p0, fixed + 0.08, p1, 0.18);
+    }
+    return;
+  }
   const base = wall.kind === "half" ? 1.1 : 0.12;
   for (const [p0, p1] of pieces) {
     const len = p1 - p0;
@@ -433,6 +444,276 @@ function screenOn(parent, screen, x, y, z, rotY = 0, frame = true) {
   screen.mesh.position.z = 0.002;
   g.add(screen.mesh);
   return g;
+}
+
+
+// ---------------------------------------------------------------------------
+// Aile Est : studio marketing, juridique, salle de repos (et ses chats), salle de sport, RH
+
+function beanBag(parent, nav, x, z, color) {
+  const g = group(parent, x, z);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), mat(color, { roughness: 1 }));
+  m.scale.set(1, 0.55, 1);
+  m.position.y = 0.22;
+  m.castShadow = true;
+  g.add(m);
+  nav.blockBox(x, z, 0.7, 0.7, false, 0.05);
+}
+
+function catBed(parent, x, z, color = "#c96b5b") {
+  const g = group(parent, x, z);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.07, 8, 20), mat(color, { roughness: 1 }));
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.07;
+  g.add(rim);
+  addCyl(g, 0.22, 0.22, 0.05, mat("#f3e9dc", { roughness: 1 }), 0, 0.03, 0, 18);
+}
+
+function catTree(parent, nav, x, z) {
+  const g = group(parent, x, z);
+  const sisal = mat("#d9b98c", { roughness: 1 });
+  const plush = mat("#8d7a6a", { roughness: 1 });
+  addBox(g, 0.8, 0.06, 0.8, plush, 0, 0.03, 0);
+  addCyl(g, 0.06, 0.06, 1.6, sisal, -0.2, 0.8, -0.2, 10);
+  addCyl(g, 0.06, 0.06, 1.1, sisal, 0.22, 0.55, 0.2, 10);
+  addBox(g, 0.55, 0.05, 0.5, plush, 0.15, 0.62, 0.15);
+  addBox(g, 0.4, 0.3, 0.4, plush, 0.15, 1.27, 0.12); // niche
+  addBox(g, 0.5, 0.04, 0.5, plush, 0, 1.62, 0);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), mat("#ff4d6d"));
+  ball.position.set(0.3, 1.42, 0.25);
+  g.add(ball);
+  nav.blockBox(x, z, 0.8, 0.8, false, 0.05);
+}
+
+function arcade(parent, nav, x, z, screen) {
+  const g = group(parent, x, z, 0);
+  addBox(g, 0.7, 1.75, 0.6, mat("#3d348b"), 0, 0.875, 0);
+  addBox(g, 0.72, 0.25, 0.66, mat("#f7b801"), 0, 1.86, 0.02);
+  addBox(g, 0.6, 0.06, 0.3, M.dark, 0, 1.0, 0.36);
+  for (const [bx, c] of [[-0.12, "#ef476f"], [0.02, "#06d6a0"], [0.14, "#ffd166"]]) addCyl(g, 0.025, 0.025, 0.03, mat(c), bx, 1.04, 0.42, 8);
+  screenOn(g, screen, 0, 1.42, 0.31, 0, false);
+  nav.blockBox(x, z, 0.7, 0.6, false, 0.05);
+}
+
+function treadmill(parent, nav, x, z) {
+  const g = group(parent, x, z);
+  addBox(g, 0.75, 0.16, 1.6, M.dark, 0, 0.08, 0);
+  addBox(g, 0.55, 0.02, 1.4, mat("#2b2b2b", { roughness: 1 }), 0, 0.17, 0.05, { cast: false });
+  for (const sx of [-0.33, 0.33]) addBox(g, 0.05, 1.05, 0.05, M.steel, sx, 0.6, -0.72);
+  addBox(g, 0.72, 0.28, 0.12, M.dark, 0, 1.15, -0.72);
+  addBox(g, 0.4, 0.16, 0.02, new THREE.MeshBasicMaterial({ color: "#4cc9f0", toneMapped: false }), 0, 1.18, -0.65, { cast: false });
+  nav.blockBox(x, z - 0.6, 0.8, 0.3, false, 0.05);
+}
+
+function balloon(parent, x, y, z, color) {
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), mat(color, { roughness: 0.3 }));
+  b.scale.set(1, 1.2, 1);
+  b.position.set(x, y, z);
+  parent.add(b);
+  addCyl(parent, 0.004, 0.004, y - 0.8, mat("#ffffff"), x, (y + 0.8) / 2 - 0.08, z, 4);
+}
+
+function buildEastWing({ rooms, nav, screens, station }) {
+  // ---- Studio Marketing : moodboard, écran de performance pub
+  {
+    const g = rooms.marketing;
+    for (const seat of ROOM_DESKS.marketing) station(g, seat, { chairMat: mat("#ff8a5b"), deskMat: M.woodLight });
+    screens.moodboard = new CanvasScreen(3.2, 1.5, { px: 640, glow: false });
+    screenOn(g, screens.moodboard, 28.4, 1.65, -16.84);
+    screens.ads = new CanvasScreen(2.2, 1.2, { px: 480 });
+    screenOn(g, screens.ads, 31.5, 1.7, -16.84);
+    // Nuancier et lampe d'architecte
+    const swatch = group(g, 32.6, -9.9);
+    const colors = ["#ff8a5b", "#f7c948", "#06d6a0", "#118ab2", "#ef476f", "#8338ec"];
+    colors.forEach((c, i) => addBox(swatch, 0.05, 0.3, 0.08, mat(c), -0.15 + i * 0.06, 1.0, 0));
+    addBox(swatch, 0.4, 0.85, 0.3, M.white, 0, 0.42, 0);
+    nav.blockBox(32.6, -9.9, 0.45, 0.35, false, 0.05);
+    plant(g, nav, 26.6, -9.8, 1.0);
+  }
+
+  // ---- Juridique & Admin : bibliothèque de codes, classeurs, balance de la justice
+  {
+    const g = rooms.legal;
+    for (const seat of ROOM_DESKS.legal) station(g, seat, { deskMat: M.deskDark, chairMat: M.chairLeather });
+    bookshelf(g, nav, 34.6, -16.66, 0, 2.6);
+    screens.legal = new CanvasScreen(2.4, 1.2, { px: 520 });
+    screenOn(g, screens.legal, 38.3, 1.7, -16.84);
+    for (const z of [-10.4, -11.2]) addBox(g, 0.5, 1.3, 0.6, mat("#7d8597", { metalness: 0.3 }), 39.55, 0.65, z);
+    nav.blockRect(39.25, -11.55, 39.85, -10.05, 0.1);
+    // Balance sur le bureau de la juriste
+    const scale = group(g, 35.55, -14.35);
+    const brass = mat("#c9a227", { metalness: 0.6, roughness: 0.35 });
+    addCyl(scale, 0.06, 0.08, 0.03, brass, 0, 0.79, 0, 12);
+    addCyl(scale, 0.01, 0.01, 0.3, brass, 0, 0.94, 0, 6);
+    addBox(scale, 0.34, 0.012, 0.012, brass, 0, 1.08, 0);
+    for (const sx of [-0.16, 0.16]) addCyl(scale, 0.05, 0.04, 0.012, brass, sx, 0.98, 0, 12);
+    plant(g, nav, 33.6, -9.8, 0.9);
+  }
+
+  // ---- Salle de repos : canapés, poufs, télé, borne d'arcade, arbre à chat
+  {
+    const g = rooms.lounge;
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 4), mat("#e9c46a", { roughness: 1 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(35.5, 0.012, -3.2);
+    g.add(rug);
+    sofa(g, nav, 35.5, -3.65, Math.PI, 2.4, mat("#2a9d8f"));
+    sofa(g, nav, 38.95, -1.5, -Math.PI / 2, 2.2, mat("#e76f51"));
+    // Meuble télé + écran
+    addBox(g, 2.2, 0.45, 0.45, M.wood, 35.5, 0.225, -6.6);
+    addBox(g, 0.3, 0.06, 0.15, M.dark, 36.2, 0.48, -6.55);
+    nav.blockBox(35.5, -6.6, 2.2, 0.45);
+    screens.lounge = new CanvasScreen(1.9, 1.05, { px: 480 });
+    const tv = screenOn(g, screens.lounge, 35.5, 1.15, -6.62);
+    addBox(tv, 0.1, 0.45, 0.06, M.dark, 0, -0.62, -0.05);
+    screens.arcade = new CanvasScreen(0.48, 0.36, { px: 160 });
+    arcade(g, nav, 33.4, -6.4, screens.arcade);
+    catTree(g, nav, 32.0, -6.2);
+    beanBag(g, nav, 32.7, -0.6, "#8338ec");
+    beanBag(g, nav, 32.9, 1.5, "#ffbe0b");
+    roundTable(g, nav, 35.0, 1.3, { radius: 0.5, chairs: false });
+    for (const seat of SPOTS_TABLE) chair(group(g, seat.x, seat.z, seat.facing), M.chair);
+    catBed(g, 39.3, -6.3, "#c96b5b");
+    catBed(g, 39.2, 3.3, "#577590");
+    catBed(g, 37.2, -6.55, "#9d4edd");
+    for (const [bx, c] of [[37.8, "#ef476f"], [38.25, "#118ab2"]]) {
+      addCyl(g, 0.11, 0.13, 0.06, mat(c), bx, 0.03, 3.45, 14);
+      addCyl(g, 0.09, 0.09, 0.02, mat("#8d5524"), bx, 0.06, 3.45, 12);
+    }
+    plant(g, nav, 39.4, 0.6, 1.1);
+    plant(g, nav, 31.6, 3.4, 0.9);
+    const yarn = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), mat("#ff8fab"));
+    yarn.position.set(36.6, 0.07, -1.6);
+    g.add(yarn);
+  }
+
+  // ---- Salle de sport : tapis de course, sac de frappe, tapis de yoga, dojo de Bertrand
+  {
+    const g = rooms.gym;
+    treadmill(g, nav, 27.6, 15.2);
+    treadmill(g, nav, 29.4, 15.2);
+    const dojo = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), mat("#c1121f", { roughness: 1 }));
+    dojo.rotation.x = -Math.PI / 2;
+    dojo.position.set(28.2, 0.014, 11.8);
+    g.add(dojo);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.82, 32), mat("#ffffff"));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(28.2, 0.016, 11.8);
+    g.add(ring);
+    for (const [z, c] of [[13.6, "#8338ec"], [14.6, "#06d6a0"], [15.6, "#ff8fab"]]) {
+      const yoga = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.6), mat(c, { roughness: 1 }));
+      yoga.rotation.x = -Math.PI / 2;
+      yoga.position.set(31.6, 0.016, z);
+      g.add(yoga);
+    }
+    // Sac de frappe suspendu
+    addCyl(g, 0.01, 0.01, 0.75, M.steel, 32.2, 2.3, 11.4, 6);
+    addCyl(g, 0.2, 0.2, 0.95, mat("#7a1f1f"), 32.2, 1.45, 11.4, 14);
+    nav.blockBox(32.2, 11.4, 0.45, 0.45, false, 0.05);
+    // Râtelier d'haltères
+    addBox(g, 0.4, 0.8, 1.6, M.dark, 26.35, 0.4, 13.6);
+    for (let i = 0; i < 4; i++) for (const y of [0.35, 0.7]) addCyl(g, 0.07, 0.07, 0.3, mat(i % 2 ? "#e63946" : "#1d3557"), 26.45, y, 13.0 + i * 0.4, 10).rotation.x = Math.PI / 2;
+    nav.blockBox(26.35, 13.6, 0.4, 1.6);
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.6), new THREE.MeshStandardMaterial({ color: "#cfe6ff", metalness: 0.9, roughness: 0.08 }));
+    mirror.position.set(26.1, 1.4, 11.2);
+    mirror.rotation.y = Math.PI / 2;
+    g.add(mirror);
+    plant(g, nav, 32.4, 16.4);
+  }
+
+  // ---- Bureau RH : boîte à suggestions, plante triste de Gérard, ballons d'Amandine, mur des champions
+  {
+    const g = rooms.hr;
+    for (const seat of ROOM_DESKS.hr) station(g, seat, { chairMat: mat("#f28482") });
+    addCyl(g, 0.03, 0.05, 1.0, M.metal, 34.0, 0.5, 9.9, 8);
+    addBox(g, 0.36, 0.16, 0.3, mat("#b08968"), 34.0, 1.08, 9.9);
+    addBox(g, 0.16, 0.012, 0.02, M.dark, 34.0, 1.165, 9.9, { cast: false });
+    nav.blockBox(34.0, 9.9, 0.4, 0.4, false, 0.05);
+    // Plante triste (tiges tombantes)
+    const sad = group(g, 34.5, 14.4);
+    addCyl(sad, 0.07, 0.06, 0.12, M.pot, 0, 0.84, 0, 10);
+    for (let i = 0; i < 4; i++) {
+      const leaf = addBox(sad, 0.02, 0.18, 0.05, mat("#8a9a5b"), Math.cos(i * 1.6) * 0.05, 0.9, Math.sin(i * 1.6) * 0.05);
+      leaf.rotation.z = (i % 2 ? 1 : -1) * 1.1;
+    }
+    for (const [x, c, y] of [[39.1, "#ff8fab", 1.55], [39.3, "#ffd166", 1.7], [38.9, "#4cc9f0", 1.62]]) balloon(g, x, y, 14.4, c);
+    for (const z of [11.0, 11.8]) addBox(g, 0.5, 1.2, 0.6, mat("#a5a58d"), 39.55, 0.6, z);
+    nav.blockRect(39.25, 10.65, 39.85, 12.15, 0.1);
+    screens.hrWall = new CanvasScreen(2.4, 1.3, { px: 520 });
+    screenOn(g, screens.hrWall, 33.1, 1.6, 12.8, Math.PI / 2);
+    for (const x of [34.6, 38.0]) {
+      chair(group(g, x, 12.6, 0), M.chair);
+      nav.blockBox(x, 12.6, 0.5, 0.5, false, 0.05);
+    }
+  }
+
+  // ---- Totem « Employé du mois » à l'entrée et panneau « jours sans incident »
+  {
+    const g = rooms.openspace;
+    screens.eotm = new CanvasScreen(1.3, 1.7, { px: 360 });
+    const totem = screenOn(g, screens.eotm, EOTM_TOTEM.x, 1.55, EOTM_TOTEM.z);
+    addBox(totem, 0.1, 0.8, 0.1, M.gold, 0, -1.2, -0.06);
+    addBox(totem, 0.6, 0.06, 0.4, M.gold, 0, -1.55, -0.06);
+    nav.blockBox(EOTM_TOTEM.x, EOTM_TOTEM.z, 0.6, 0.4, false, 0.1);
+    screens.incident = new CanvasScreen(1.5, 0.8, { px: 420 });
+    const sign = screenOn(g, screens.incident, -10.5, 1.5, 7.9);
+    addBox(sign, 0.06, 1.1, 0.06, M.frame, -0.6, -0.75, -0.05);
+    addBox(sign, 0.06, 1.1, 0.06, M.frame, 0.6, -0.75, -0.05);
+    nav.blockBox(-10.5, 7.9, 1.5, 0.3, false, 0.1);
+    screens.interns = new CanvasScreen(1.6, 0.45, { px: 420, glow: false });
+    const tag = screenOn(g, screens.interns, 28.5, 1.42, 0.53, 0, false);
+    tag.scale.setScalar(0.9);
+  }
+}
+
+const SPOTS_TABLE = [{ x: 35.0, z: 0.45, facing: 0 }, { x: 35.0, z: 2.15, facing: Math.PI }];
+
+// Déco de saison : citrouilles en octobre, sapin en décembre.
+function pumpkin(parent, x, y, z, s = 1) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.scale.setScalar(s);
+  parent.add(g);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 10), mat("#f77f00", { roughness: 0.6 }));
+  body.scale.set(1.15, 0.85, 1.15);
+  body.position.y = 0.13;
+  g.add(body);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.08, 6), mat("#386641"));
+  stem.position.y = 0.29;
+  g.add(stem);
+  for (const sx of [-0.05, 0.05]) {
+    const eye = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.04, 3), new THREE.MeshBasicMaterial({ color: "#ffd166", toneMapped: false }));
+    eye.position.set(sx, 0.17, 0.175);
+    eye.rotation.x = Math.PI / 2;
+    g.add(eye);
+  }
+}
+
+function seasonalDecor(parent, nav, month) {
+  if (month === 9) {
+    for (const [x, y, z, s] of [[-1.3, 0, 15.6, 1.3], [1.3, 0, 15.6, 1.1], [-4.4, 1.165, 13.6, 0.8], [-22.4, 0.98, 16.5, 0.8], [36.6, 0.45, -6.6, 0.8], [-21.0, 0.77, -13.6, 0.6], [11.8, 0, 9.6, 1.2]]) pumpkin(parent, x, y, z, s);
+  } else if (month === 11) {
+    const g = group(parent, 2.6, 15.4);
+    addCyl(g, 0.08, 0.08, 0.3, M.wood, 0, 0.15, 0, 8);
+    [[0.75, 0.9, 0.55], [0.58, 0.75, 1.1], [0.38, 0.6, 1.55]].forEach(([r, h, y]) => {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 12), mat("#2d6a4f"));
+      cone.position.y = y;
+      cone.castShadow = true;
+      g.add(cone);
+    });
+    for (let i = 0; i < 12; i++) {
+      const a = i * 2.1;
+      const y = 0.5 + (i / 12) * 1.3;
+      const r = 0.7 - (i / 12) * 0.45;
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), mat(["#e63946", "#f7c948", "#4cc9f0"][i % 3], { metalness: 0.5, roughness: 0.3 }));
+      ball.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
+      g.add(ball);
+    }
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.12), new THREE.MeshBasicMaterial({ color: "#ffd166", toneMapped: false }));
+    star.position.y = 1.95;
+    g.add(star);
+    nav.blockBox(2.6, 15.4, 1.4, 1.4, false, 0.05);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -518,10 +799,13 @@ export function buildOffice(scene, nav) {
   const station = (parent, seat, opts = {}) => workstation(parent, nav, seat, opts);
 
   // ---- Socle et sols
-  addBox(scene, BOUNDS.maxX - BOUNDS.minX + 1.2, 0.5, BOUNDS.maxZ - BOUNDS.minZ + 1.2, mat("#3a3f55"), 0, -0.262, 0, { cast: false });
-  const baseTex = floorTexture("#8c9aa6", null, { size: 256, speckle: true, repeat: [14, 9] });
+  const cx = (BOUNDS.minX + BOUNDS.maxX) / 2;
+  const cz = (BOUNDS.minZ + BOUNDS.maxZ) / 2;
+  addBox(scene, BOUNDS.maxX - BOUNDS.minX + 1.2, 0.5, BOUNDS.maxZ - BOUNDS.minZ + 1.2, mat("#3a3f55"), cx, -0.262, cz, { cast: false });
+  const baseTex = floorTexture("#8c9aa6", null, { size: 256, speckle: true, repeat: [18, 9] });
   const base = new THREE.Mesh(new THREE.PlaneGeometry(BOUNDS.maxX - BOUNDS.minX, BOUNDS.maxZ - BOUNDS.minZ), new THREE.MeshStandardMaterial({ map: baseTex, roughness: 1 }));
   base.rotation.x = -Math.PI / 2;
+  base.position.set(cx, 0, cz);
   base.receiveShadow = true;
   base.userData.walk = true;
   scene.add(base);
@@ -538,6 +822,11 @@ export function buildOffice(scene, nav) {
     reception: { map: floorTexture("#b9b2a3", null, { speckle: true, repeat: [2, 2] }) },
     photo: { color: "#f2f2f2" },
     warehouse: { map: floorTexture("#9a9a94", "#8d8d86", { tiles: 4, repeat: [4, 2] }) },
+    marketing: { map: floorTexture("#d8c3a0", "#c9b38e", { tiles: 8, repeat: [3, 3] }) },
+    legal: { map: floorTexture("#2f3b52", null, { speckle: true, repeat: [3, 3] }) },
+    lounge: { map: floorTexture("#b98b73", null, { speckle: true, repeat: [3, 4] }) },
+    gym: { map: floorTexture("#3a3f47", null, { speckle: true, repeat: [3, 3] }) },
+    hr: { map: floorTexture("#c9b8a0", null, { speckle: true, repeat: [3, 3] }) },
   };
   for (const [id, area] of Object.entries(AREAS)) {
     if (!floors[id]) continue;
@@ -551,9 +840,9 @@ export function buildOffice(scene, nav) {
 
   // ---- Murs
   const windows = {
-    "-17": [-24.5, -19.0, -15.5, -8.5, 4.5, 7.2],
-    17: [-23, -17, -11, -5, 6, 12, 18, 24],
-    x: { "-26": [-6, -2, 2, 6], 26: [-6, -2, 2, 6] },
+    "-17": [-24.5, -19.0, -15.5, -8.5, 4.5, 7.2, 28.4, 31.4, 35.2, 38.4],
+    17: [-23, -17, -11, -5, 6, 12, 18, 24, 28, 31, 35.4, 38.6],
+    x: { "-26": [-6, -2, 2, 6], 40: [-14.5, -11.5, -5.2, -2, 1.6, 11.6, 15] },
   };
   for (const wall of WALLS) {
     if (wall.kind !== "outer") {
@@ -825,7 +1114,7 @@ export function buildOffice(scene, nav) {
     pods.userData.roomId = "openspace";
     g.add(pods);
     for (const pod of PODS) {
-      for (const seat of pod.seats) station(pods, seat, { deskMat: M.desk });
+      for (const seat of pod.seats) station(pods, seat, { deskMat: pod.index === INTERN_POD ? M.woodLight : M.desk });
       // Cloisons en tissu façon "cubicle"
       addBox(pods, 3.2, 1.15, 0.06, M.fabric, pod.x, 0.58, pod.z);
       for (const sx of [-1, 1]) addBox(pods, 0.06, 1.15, 1.7, M.fabric, pod.x + sx * 1.6, 0.58, pod.z);
@@ -878,6 +1167,9 @@ export function buildOffice(scene, nav) {
     plant(fixtures, nav, -1.6, 9.6, 1.1);
     plant(fixtures, nav, 1.4, 9.6, 1.1);
   }
+
+  buildEastWing({ rooms, nav, screens, station, fixtures });
+  seasonalDecor(fixtures, nav, new Date().getMonth());
 
   const monitors = buildMonitors(staticRoot);
   mergeStatic(staticRoot);

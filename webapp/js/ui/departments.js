@@ -1,4 +1,4 @@
-// Tableaux de bord des pôles : Vente, Sourcing & Bons plans, Social & Contenu, Créateurs.
+// Tableaux de bord des pôles : Vente, Sourcing & Bons plans, Social & Contenu, Créateurs, Marketing, Juridique.
 
 import { h, clear, toast, haptic, timeAgo, openLink, shouldInterceptLinks } from "./dom.js";
 import { section, empty, taskList, missionForm, docRow, agentRow } from "./components.js";
@@ -281,4 +281,60 @@ const createurs = deptPanel({
   extras: createursBlock,
 });
 
-export const DEPT_PANELS = { vente, sourcing, social, createurs };
+// ---------------------------------------------------------------------------
+// 🎨 Marketing & Création
+
+function quickGrid(ctx, items) {
+  return h("div", { class: "quick-grid" }, items.map(([icon, label, role, type, title]) => h("button", {
+    class: "quick",
+    onClick: () => {
+      const agent = leastLoaded(ctx.state(), role);
+      createTask(ctx, { title, type, agentId: agent?.id }, `${icon} ${agent?.name || "Le pôle"} s'y met`);
+    },
+  }, h("b", {}, icon), h("span", {}, label))));
+}
+
+function marketingBlock(ctx) {
+  return {
+    el: section("⚡ Commandes express", quickGrid(ctx, [
+      ["🎨", "Miniatures TikTok", "designer", "design", "Pack de 3 miniatures TikTok pour nos prochaines vidéos"],
+      ["🏷️", "Logo de la boutique", "designer", "design", "Logo et mini-charte graphique de la boutique"],
+      ["📈", "Campagne pub 50 €", "growth", "ads", "Campagne pub TikTok/Meta à 50 € pour booster les ventes"],
+      ["📊", "Tableau de bord", "data", "data", "Tableau de bord des ventes et des réseaux du mois"],
+    ])),
+  };
+}
+
+const marketing = deptPanel({
+  dept: "marketing",
+  presets: ["Charte graphique de la marque", "Plan d'acquisition sur 30 jours", "Analyse des stats TikTok du mois"],
+  placeholder: "Ex : Bannière pour le canal Telegram",
+  extras: marketingBlock,
+});
+
+// ---------------------------------------------------------------------------
+// ⚖️ Juridique & Admin
+
+function legalBlock(ctx) {
+  return {
+    el: h("div", {},
+      h("div", { class: "card section", style: { borderColor: "#8fa3bf" } },
+        h("strong", {}, "⚖️ Bon à savoir"),
+        h("p", { class: "small muted", style: { marginBottom: 0 } }, "Sandrine prépare des modèles et des analyses solides, mais ce n'est pas un avis d'avocat : fais valider les points sensibles par un professionnel. Avec une clé API, elle vérifie les règles en vigueur sur le web.")),
+      section("⚡ Documents express", quickGrid(ctx, [
+        ["📜", "CGV boutique", "lawyer", "legal", "Conditions générales de vente pour ma boutique en ligne"],
+        ["🔏", "Mentions légales", "lawyer", "legal", "Mentions légales et politique de confidentialité RGPD du site"],
+        ["🤝", "Contrat freelance", "lawyer", "legal", "Modèle de contrat de prestation pour un freelance (monteur vidéo)"],
+        ["🗂️", "Démarches du mois", "admin", "admin", "Checklist des démarches administratives et échéances du mois"],
+      ]))),
+  };
+}
+
+const legal = deptPanel({
+  dept: "juridique",
+  presets: ["Seuils micro-entreprise et TVA", "Contrat de collaboration créatrice (modèle)", "Que faire en cas de litige Vinted ?"],
+  placeholder: "Ex : Ai-je le droit de revendre des articles neufs ?",
+  extras: legalBlock,
+});
+
+export const DEPT_PANELS = { vente, sourcing, social, createurs, marketing, legal };

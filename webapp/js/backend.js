@@ -1,7 +1,7 @@
 // Accès aux données du QG : API du bot (dans Telegram) ou simulation locale (mode démo).
 
 import { OfficeRuntime } from "../shared/runtime.js";
-import { createInitialState, migrateState, toClientState, getDocument } from "../shared/engine.js";
+import { createInitialState, migrateState, toClientState, getDocument, publicResult } from "../shared/engine.js";
 import { createTemplateGenerator } from "../shared/templates.js";
 import { tg } from "./ui/dom.js";
 
@@ -209,7 +209,7 @@ class LocalBackend extends Emitter {
     const result = this.runtime.dispatch(type, payload);
     this.state = toClientState(this.runtime.state);
     this.emit();
-    return result?.id ? { id: result.id } : null;
+    return publicResult(result);
   }
 
   async query(type, payload = {}) {

@@ -9,15 +9,19 @@ import { buildOffice } from "./props.js";
 import { Person, mat } from "./people.js";
 import { LifeDirector } from "./life.js";
 import { Crowd } from "./crowd.js";
-import { AREAS, BOUNDS, MEETING_SEATS, SPOTS, ROOM_DESKS, PODS, DEPT_PODS, assignDesks, deptAnchor, deskTop } from "./layout.js";
+import { CatHerd } from "./cats.js";
+import { AREAS, BOUNDS, MEETING_SEATS, SPOTS, ROOM_DESKS, PODS, DEPT_PODS, INTERN_POD, EOTM_TOTEM, assignDesks, deptAnchor, deskTop } from "./layout.js";
 import { ROOMS, PANELS, DEPARTMENTS, ROLES, TASK_TYPES, roleOf } from "../../shared/roster.js";
 import { taskProgress, liveMeeting, computeKpis } from "../../shared/engine.js";
+import { HIDING_SPOTS, monthLabel } from "../../shared/social.js";
 
 const BOSS_LOOK = { skin: "#f0c9a8", hair: "#3b2a20", hairStyle: "short", shirt: "#f4f4fa", pants: "#1f2a44" };
 const COURIER_LOOK = { skin: "#c68d6a", hair: "#1f1a17", hairStyle: "short", shirt: "#06c167", pants: "#111111" };
 const CAMERAMAN_LOOK = { skin: "#e8b796", hair: "#5a4632", hairStyle: "short", shirt: "#3a3a3a", pants: "#2b2f3a" };
 const DEPT_SIGNS = { direction: "director", vente: "vente", sourcing: "sourcing", social: "social", organisation: "openspace" };
 const IS_TOUCH = matchMedia("(pointer: coarse)").matches;
+const CENTER_X = (BOUNDS.minX + BOUNDS.maxX) / 2;
+const TRIP_EMOJI = { coffee: "☕", eat: "🍔", sleep: "💤", babyfoot: "⚽", dance: "🕺", run: "🏃", yoga: "🧘", karate: "🥋", pet: "🐈", game: "🎮", hug: "🤗", punch: "🥊", relax: "🛋️", lift: "🏋️" };
 
 // Îlot → pôle (pour ouvrir le bon tableau de bord quand on touche un îlot).
 const POD_DEPT = new Map();
@@ -25,6 +29,58 @@ for (const dept of ["vente", "sourcing", "social", "direction", "organisation", 
   for (const index of DEPT_PODS[dept] || []) if (!POD_DEPT.has(index)) POD_DEPT.set(index, dept);
 }
 const DEPT_PANEL = { direction: "director", vente: "vente", sourcing: "sourcing", social: "social", organisation: "openspace", tech: "studio", createurs: "createurs" };
+
+// Petits objets perdus des quêtes « cache-cache ».
+function questItemMesh(kind) {
+  const g = new THREE.Group();
+  const add = (geo, color, x = 0, y = 0, z = 0, extra = {}) => {
+    const m = new THREE.Mesh(geo, mat(color, extra));
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  switch (kind) {
+    case "tupperware":
+      add(new THREE.BoxGeometry(0.22, 0.09, 0.16), "#e8f4ff", 0, 0.045, 0, { transparent: true, opacity: 0.8 });
+      add(new THREE.BoxGeometry(0.23, 0.02, 0.17), "#3a86ff", 0, 0.1, 0);
+      add(new THREE.BoxGeometry(0.16, 0.04, 0.1), "#c1121f", 0, 0.04, 0);
+      break;
+    case "stapler":
+      add(new THREE.BoxGeometry(0.18, 0.03, 0.05), "#2b2b2b", 0, 0.015, 0);
+      add(new THREE.BoxGeometry(0.17, 0.035, 0.045), "#e63946", 0.005, 0.05, 0).rotation.z = 0.12;
+      break;
+    case "headphones": {
+      const band = add(new THREE.TorusGeometry(0.09, 0.015, 6, 16, Math.PI), "#ff4d8d", 0, 0.06, 0);
+      band.rotation.y = Math.PI / 2;
+      for (const sz of [-0.09, 0.09]) add(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 12), "#ff4d8d", 0, 0.06, sz).rotation.x = Math.PI / 2;
+      break;
+    }
+    case "keys":
+      add(new THREE.TorusGeometry(0.04, 0.008, 6, 14), "#c9a227", 0, 0.01, 0, { metalness: 0.7, roughness: 0.3 }).rotation.x = Math.PI / 2;
+      add(new THREE.BoxGeometry(0.09, 0.01, 0.025), "#adb5bd", 0.07, 0.01, 0, { metalness: 0.7, roughness: 0.3 });
+      add(new THREE.BoxGeometry(0.08, 0.01, 0.02), "#c9a227", 0.05, 0.012, 0.04, { metalness: 0.7, roughness: 0.3 }).rotation.y = 0.6;
+      break;
+    case "lens":
+      add(new THREE.CylinderGeometry(0.05, 0.055, 0.1, 14), "#1b1b1b", 0, 0.05, 0);
+      add(new THREE.CylinderGeometry(0.04, 0.04, 0.01, 14), "#4cc9f0", 0, 0.105, 0, { metalness: 0.6, roughness: 0.1 });
+      break;
+    case "plush":
+      add(new THREE.SphereGeometry(0.07, 12, 10), "#a0703f", 0, 0.07, 0);
+      add(new THREE.SphereGeometry(0.05, 12, 10), "#a0703f", 0, 0.16, 0.01);
+      for (const sx of [-0.04, 0.04]) add(new THREE.SphereGeometry(0.02, 8, 6), "#7f5539", sx, 0.205, 0);
+      break;
+    case "drive":
+      add(new THREE.BoxGeometry(0.13, 0.03, 0.09), "#212529", 0, 0.015, 0);
+      add(new THREE.BoxGeometry(0.015, 0.01, 0.015), "#4cc38a", 0.05, 0.034, 0.03);
+      break;
+    default:
+      add(new THREE.BoxGeometry(0.08, 0.005, 0.11), "#ffffff", 0, 0.005, 0);
+      add(new THREE.BoxGeometry(0.06, 0.006, 0.04), "#5aa9e6", 0, 0.008, -0.02);
+      add(new THREE.TorusGeometry(0.06, 0.006, 4, 16), "#e63946", 0, 0.004, 0.09).rotation.x = Math.PI / 2;
+  }
+  return g;
+}
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -88,13 +144,19 @@ class Actor {
 }
 
 export class World {
-  constructor(container, { now, onSelectPanel, onSelectAgent, onLife, onInterview }) {
+  constructor(container, { now, onSelectPanel, onSelectAgent, onLife, onInterview, onCat, onQuestFound }) {
     this.container = container;
     this.now = now;
     this.onSelectPanel = onSelectPanel;
     this.onSelectAgent = onSelectAgent;
     this.onLife = onLife;
     this.onInterview = onInterview;
+    this.onCat = onCat;
+    this.onQuestFound = onQuestFound;
+    this.questItems = new Map();
+    this.floorMess = new Map();
+    this.confettiFx = null;
+    this.lastIncidentAt = 0;
     this.actors = new Map();
     this.npcs = new Map();
     this.mess = new Map();
@@ -144,10 +206,12 @@ export class World {
     this.hemi = new THREE.HemisphereLight("#eef3ff", "#5b5146", 1.25);
     scene.add(this.hemi);
     const sun = new THREE.DirectionalLight("#fff6e6", 2.0);
-    sun.position.set(16, 34, 20);
+    sun.position.set(CENTER_X + 16, 34, 20);
+    sun.target.position.set(CENTER_X, 0, 0);
+    scene.add(sun.target);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(IS_TOUCH ? 1536 : 2048, IS_TOUCH ? 1536 : 2048);
-    Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 24, bottom: -24, near: 1, far: 110 });
+    sun.shadow.mapSize.set(IS_TOUCH ? 2048 : 2560, IS_TOUCH ? 2048 : 2560);
+    Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 24, bottom: -24, near: 1, far: 110 });
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     scene.add(sun);
@@ -189,6 +253,9 @@ export class World {
     this.spawnNpc("courier", COURIER_LOOK, "delivery-bag", "Livreur", { ...SPOTS.entranceOut }, false);
     this.spawnNpc("cameraman", CAMERAMAN_LOOK, "tv-camera", "Équipe de tournage", { x: 24.6, z: 7.9, facing: Math.PI, standing: true }, true);
     this.life = new LifeDirector(this);
+    this.cats = new CatHerd(this);
+    this.installBubbles();
+    this.drawStaticScreens();
 
     this.installPicking();
     this.resize();
@@ -261,7 +328,7 @@ export class World {
 
   overview(animate = true) {
     // Distance minimale pour que tout l'étage (murs compris) tienne entre le HUD et le dock.
-    const target = new THREE.Vector3(this.portrait ? 0.6 : 0, 0, this.portrait ? 0.5 : 1);
+    const target = new THREE.Vector3(CENTER_X + (this.portrait ? 0.6 : 0), 0, this.portrait ? 0.5 : 1);
     const corners = [];
     for (const [x, z] of [[BOUNDS.minX, BOUNDS.minZ], [BOUNDS.maxX, BOUNDS.minZ], [BOUNDS.maxX, BOUNDS.maxZ], [BOUNDS.minX, BOUNDS.maxZ]]) {
       corners.push(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, 2.7, z));
@@ -298,6 +365,8 @@ export class World {
     this.selected = null;
     if (panelId === "openspace") {
       this.focusPoint(0, 0, 30, sheet, { x: AREAS.openspace.visit[0], z: AREAS.openspace.visit[1] });
+    } else if (panelId === "quests") {
+      this.focusPoint(EOTM_TOTEM.x + 2, EOTM_TOTEM.z, 14, sheet, { x: EOTM_TOTEM.x + 1.8, z: EOTM_TOTEM.z + 2.2 });
     } else if (panel.dept && (panelId === "sourcing" || panelId === "vente")) {
       const a = deptAnchor(panel.dept);
       this.focusPoint(a.x, a.z, 17, sheet, { x: a.x, z: a.z + 2.6 });
@@ -344,7 +413,7 @@ export class World {
       const area = AREAS[id];
       if (!area?.label) continue;
       this.roomTags[id] = tag(
-        `<span>${room.icon}</span><span>${room.name}</span><span class="count" hidden></span>`,
+        `<span>${room.icon}</span><span>${room.tag || room.name}</span><span class="count" hidden></span>`,
         room.color,
         new THREE.Vector3(area.label[0], 3.1, area.label[1]),
         () => this.onSelectPanel?.(room.panel)
@@ -359,6 +428,13 @@ export class World {
       el.dataset.panel = panel;
       this.roomTags[`dept:${dept}`] = el;
     }
+    const pod = PODS[INTERN_POD];
+    const interns = tag(`<span>🧃</span><span>Stagiaires</span>`, "#06d6a0", new THREE.Vector3(pod.x, 2.55, pod.z), () => this.onSelectPanel?.("rh"), "room-tag dept-tag");
+    interns.dataset.panel = "rh";
+    this.roomTags["dept:interns"] = interns;
+    const eotm = tag(`<span>🏆</span><span>Employé du mois</span>`, "#f7c948", new THREE.Vector3(EOTM_TOTEM.x, 3.05, EOTM_TOTEM.z - 0.1), () => this.onSelectPanel?.("quests"), "room-tag dept-tag eotm-tag");
+    eotm.dataset.panel = "quests";
+    this.roomTags["eotm"] = eotm;
   }
 
   highlight(panelId) {
@@ -389,6 +465,17 @@ export class World {
       const rect = el.getBoundingClientRect();
       ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, this.camera);
+      // Objets perdus des quêtes, puis chats, puis employés.
+      const itemHit = raycaster.intersectObjects([...this.questItems.values()].map((i) => i.hit), false)[0];
+      if (itemHit) {
+        this.onQuestFound?.(itemHit.object.userData.questId, itemHit.object.userData.spotId);
+        return;
+      }
+      const catId = this.cats?.pick(raycaster);
+      if (catId) {
+        this.onCat?.(catId);
+        return;
+      }
       const hitboxes = [...this.actors.values()].map((a) => a.person.hitbox);
       const agentHit = raycaster.intersectObjects(hitboxes, false)[0];
       if (agentHit) {
@@ -405,6 +492,10 @@ export class World {
         return;
       }
       const pod = PODS.find((p) => Math.abs(point.x - p.x) < 1.7 && Math.abs(point.z - p.z) < 1.7);
+      if (pod?.index === INTERN_POD) {
+        this.onSelectPanel?.("rh");
+        return;
+      }
       if (pod && POD_DEPT.has(pod.index)) {
         this.onSelectPanel?.(DEPT_PANEL[POD_DEPT.get(pod.index)]);
         return;
@@ -484,6 +575,83 @@ export class World {
     this.mess.delete(seatId);
   }
 
+  spillChili(x, z) {
+    this.clearFloorMess("chili");
+    const g = new THREE.Group();
+    g.position.set(x, 0.015, z);
+    const sauce = mat("#7a2e12", { roughness: 0.35 });
+    for (let i = 0; i < 6; i++) {
+      const blob = new THREE.Mesh(new THREE.CircleGeometry(0.18 + Math.random() * 0.2, 14), sauce);
+      blob.rotation.x = -Math.PI / 2;
+      blob.position.set((Math.random() - 0.5) * 0.9, i * 0.001, (Math.random() - 0.5) * 0.7);
+      g.add(blob);
+    }
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.18, 14), mat("#495057", { metalness: 0.5 }));
+    pot.rotation.z = Math.PI / 2;
+    pot.position.set(0.45, 0.09, 0.1);
+    g.add(pot);
+    this.messRoot.add(g);
+    this.floorMess.set("chili", { group: g, x, z });
+  }
+
+  clearFloorMess(key) {
+    const m = this.floorMess.get(key);
+    if (!m) return;
+    m.group.removeFromParent();
+    m.group.traverse((o) => o.geometry?.dispose());
+    this.floorMess.delete(key);
+  }
+
+  celebrate() {
+    const t = this.controls.target;
+    this.confetti(t.x, t.z);
+  }
+
+  confetti(x, z) {
+    if (this.confettiFx) this.confettiFx.mesh.removeFromParent();
+    const count = 90;
+    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.08, 0.05), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, toneMapped: false }), count);
+    const colors = ["#ff4d6d", "#ffd166", "#06d6a0", "#4cc9f0", "#9b5de5", "#ffffff"];
+    const color = new THREE.Color();
+    const items = [];
+    for (let i = 0; i < count; i++) {
+      mesh.setColorAt(i, color.set(colors[i % colors.length]));
+      items.push({
+        p: new THREE.Vector3(x + (Math.random() - 0.5) * 4, 2.6 + Math.random() * 1.2, z + (Math.random() - 0.5) * 3),
+        v: new THREE.Vector3((Math.random() - 0.5) * 0.4, -0.5 - Math.random() * 0.5, (Math.random() - 0.5) * 0.4),
+        r: new THREE.Euler(Math.random() * 6, Math.random() * 6, 0),
+        s: 2 + Math.random() * 4,
+      });
+    }
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.confettiFx = { mesh, items, until: performance.now() + 7000 };
+  }
+
+  updateConfetti(dt) {
+    const fx = this.confettiFx;
+    if (!fx) return;
+    if (performance.now() > fx.until) {
+      fx.mesh.removeFromParent();
+      fx.mesh.geometry.dispose();
+      this.confettiFx = null;
+      return;
+    }
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const one = new THREE.Vector3(1, 1, 1);
+    fx.items.forEach((it, i) => {
+      if (it.p.y > 0.02) {
+        it.p.addScaledVector(it.v, dt);
+        it.r.x += it.s * dt;
+        it.r.y += it.s * 0.7 * dt;
+      }
+      m4.compose(it.p, q.setFromEuler(it.r), one);
+      fx.mesh.setMatrixAt(i, m4);
+    });
+    fx.mesh.instanceMatrix.needsUpdate = true;
+  }
+
   writeWhiteboard(text, author) {
     this.whiteboardText = { text, author };
     this.drawWhiteboard();
@@ -547,7 +715,10 @@ export class World {
   }
 
   triggerLife(kind) {
-    const map = { party: "party", fireDrill: "fireDrill", teamLunch: "teamLunch", dundies: "dundies", clean: "ev_clean", prank: "ev_prankBoard", meeting: "ev_bossMeeting" };
+    const map = {
+      party: "party", fireDrill: "fireDrill", teamLunch: "teamLunch", dundies: "dundies", clean: "ev_clean", prank: "ev_prankBoard", meeting: "ev_bossMeeting",
+      catTime: "catTime", gymClass: "gymClass", karate: "ev_karate", gaming: "ev_gaming", chili: "ev_chili", internCoffee: "ev_internCoffee",
+    };
     const fn = this.life?.[map[kind]];
     return fn ? fn.call(this.life, true) !== false : false;
   }
@@ -602,11 +773,85 @@ export class World {
     const working = new Set(state.tasks.filter((t) => t.status === "working").map((t) => t.agentId));
     for (const actor of this.actors.values()) actor.working = working.has(actor.agentId);
 
+    this.cats.sync(state.life?.cats || []);
+    this.cats.syncQuests(state);
+    this.syncQuestItems(state);
     if (prev) this.reactToChanges(prev, state);
     this.prev = state;
     this.updateTags();
     this.updateMonitors();
     this.drawScreens();
+  }
+
+  // ------------------------------------------------------------ objets perdus (quêtes)
+
+  syncQuestItems(state) {
+    const open = (state.life?.round?.quests || []).filter((q) => q.kind === "seek" && q.status === "open" && q.item?.id !== "cat");
+    const keep = new Set(open.map((q) => q.id));
+    for (const [id, item] of this.questItems) {
+      if (keep.has(id)) continue;
+      item.group.removeFromParent();
+      this.questItems.delete(id);
+    }
+    for (const quest of open) {
+      if (this.questItems.has(quest.id)) continue;
+      const spot = HIDING_SPOTS.find((s) => s.id === quest.spotId);
+      if (!spot) continue;
+      const group = new THREE.Group();
+      group.position.set(spot.x, spot.y, spot.z);
+      group.add(questItemMesh(quest.item.id));
+      const sparkle = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), new THREE.MeshBasicMaterial({ color: "#fff3b0", toneMapped: false }));
+      sparkle.position.y = 0.22;
+      group.add(sparkle);
+      const hit = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.y = 0.08;
+      hit.userData = { questId: quest.id, spotId: spot.id };
+      group.add(hit);
+      this.scene.add(group);
+      this.questItems.set(quest.id, { group, hit, sparkle, base: spot.y });
+    }
+  }
+
+  // ------------------------------------------------------------ bulles de dialogue propres
+
+  installBubbles() {
+    const limit = () => (this.container.clientWidth < 700 ? 3 : 5);
+    Person.gate = (person, prio) => {
+      if (prio >= 2) return true;
+      if (prio === 0 && this.compactTags) return false;
+      const talking = [...this.actors.values(), ...this.npcs.values()].map((a) => a.person).filter((p) => p !== person && p.talking);
+      if (talking.length < limit()) return true;
+      const weakest = talking.sort((a, b) => a.bubblePrio - b.bubblePrio || a.bubbleSince - b.bubbleSince)[0];
+      if (weakest.bubblePrio >= prio && prio < 1) return false;
+      weakest.hideBubble();
+      return true;
+    };
+    setInterval(() => this.layoutBubbles(), 180);
+  }
+
+  // Empile les bulles qui se chevauchent au lieu de les superposer.
+  layoutBubbles() {
+    const bubbles = [...this.labels.domElement.querySelectorAll(".tag-bubble:not([hidden])")];
+    if (bubbles.length < 2) {
+      for (const b of bubbles) b.style.removeProperty("--lift");
+      return;
+    }
+    const boxes = bubbles.map((el) => {
+      const lift = Number.parseFloat(el.style.getPropertyValue("--lift")) || 0;
+      const r = el.getBoundingClientRect();
+      return { el, left: r.left, right: r.right, top: r.top - lift, bottom: r.bottom - lift, lift: 0 };
+    }).sort((a, b) => b.bottom - a.bottom);
+    const placed = [];
+    for (const box of boxes) {
+      for (let guard = 0; guard < 6; guard++) {
+        const hit = placed.find((o) => box.left < o.right && box.right > o.left && box.top + box.lift < o.bottom + o.lift && box.bottom + box.lift > o.top + o.lift);
+        if (!hit) break;
+        box.lift = hit.top + hit.lift - box.bottom - 4;
+      }
+      placed.push(box);
+      if (box.lift) box.el.style.setProperty("--lift", `${Math.round(box.lift)}px`);
+      else box.el.style.removeProperty("--lift");
+    }
   }
 
   reactToChanges(prev, state) {
@@ -658,6 +903,11 @@ export class World {
     if (summarizing && !prev.meetings.find((m) => m.id === summarizing.id && m.status === "summarizing")) {
       this.actors.get(summarizing.attendees[0])?.person.say("📝 Je rédige le compte rendu", 3000);
     }
+    const seen = new Set((prev.life?.stories || []).map((s) => s.id));
+    for (const story of state.life?.stories || []) if (!seen.has(story.id)) this.life?.onStory(story);
+    const oldRound = prev.life?.round;
+    const round = state.life?.round;
+    if (round?.winnerId && oldRound?.id === round.id && !oldRound.winnerId) this.life?.ceremony(round.winnerId);
     const newDeals = (state.deals || []).length - (prev.deals || []).length;
     if (newDeals > 0) {
       const deal = state.deals.at(-1);
@@ -670,17 +920,14 @@ export class World {
     if (!state) return;
     const now = this.now();
     const meeting = liveMeeting(state);
+    const champion = state.life?.hall?.[0]?.agentId;
     for (const actor of this.actors.values()) {
       const task = state.tasks.find((t) => t.agentId === actor.agentId && t.status === "working");
       let emoji = "";
       let progress = null;
       const tripActivity = actor.trip[0]?.activity;
       if (meeting?.attendees.includes(actor.agentId)) emoji = "🗣️";
-      else if (tripActivity === "coffee") emoji = "☕";
-      else if (tripActivity === "eat") emoji = "🍔";
-      else if (tripActivity === "sleep") emoji = "💤";
-      else if (tripActivity === "babyfoot") emoji = "⚽";
-      else if (tripActivity === "dance") emoji = "🕺";
+      else if (TRIP_EMOJI[tripActivity]) emoji = TRIP_EMOJI[tripActivity];
       else if (task) {
         emoji = TASK_TYPES[task.type]?.icon || "💼";
         progress = taskProgress(task, now);
@@ -688,6 +935,7 @@ export class World {
       const agent = state.agents.find((a) => a.id === actor.agentId);
       if (!emoji && agent) emoji = ROLES[agent.role]?.icon || "";
       actor.person.setStatus({ emoji, progress, compact: this.compactTags });
+      actor.person.setBadge(champion === actor.agentId ? "🏆" : "");
     }
     const k = computeKpis(state, now);
     this.setBadge("director", k.review);
@@ -702,6 +950,53 @@ export class World {
   }
 
   // ---------------------------------------------------------------- écrans muraux
+
+  // Écrans au contenu fixe (dessinés une seule fois).
+  drawStaticScreens() {
+    const s = this.office.screens;
+    s.moodboard?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#c69c6d";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      for (let i = 0; i < 400; i++) ctx.fillRect(Math.random() * W, Math.random() * H, 2, 2);
+      const colors = ["#ff8a5b", "#f7c948", "#06d6a0", "#118ab2", "#ef476f", "#8338ec"];
+      colors.forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(24 + i * 46, 24, 40, 40);
+      });
+      const notes = [["#fff3b0", "HOOK EN 3 S"], ["#ffc8dd", "UGC > PUB"], ["#bde0fe", "FOND UNI"], ["#caffbf", "TEST A/B"]];
+      notes.forEach(([c, t], i) => {
+        ctx.save();
+        ctx.translate(40 + i * 140, 120 + (i % 2) * 40);
+        ctx.rotate((i % 2 ? 1 : -1) * 0.06);
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 120, 100);
+        ctx.fillStyle = "#333";
+        ctx.font = "700 18px system-ui, sans-serif";
+        ctx.fillText(t, 10, 56);
+        ctx.restore();
+      });
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(W - 170, 30, 140, 120);
+      ctx.fillStyle = "#ffb4a2";
+      ctx.fillRect(W - 160, 40, 120, 80);
+      ctx.fillStyle = "#333";
+      ctx.font = "700 16px system-ui, sans-serif";
+      ctx.fillText("MOODBOARD", W - 155, 140);
+    });
+    s.interns?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#fffdf5";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "#06d6a0";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(4, 4, W - 8, H - 8);
+      ctx.fillStyle = "#1b1f33";
+      ctx.font = "800 34px system-ui, sans-serif";
+      ctx.fillText("🧃 STAGIAIRES", 18, 50);
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText("Merci de ne pas les nourrir après 18 h", 20, 84);
+    });
+  }
 
   drawScreens() {
     const state = this.state;
@@ -908,6 +1203,195 @@ export class World {
       if (last) ctx.fillText(ellipsis(ctx, `Dernier : ${last.title}`, W - 44), 22, 250);
     });
 
+    const font2 = font;
+    const wrap = (ctx, text, x, y, maxW, lineH, maxLines = 3) => {
+      const words = String(text).split(/\s+/);
+      let line = "";
+      let lines = 0;
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > maxW && line) {
+          ctx.fillText(lines === maxLines - 1 ? `${line}…` : line, x, y + lines * lineH);
+          lines += 1;
+          line = w;
+          if (lines >= maxLines) return;
+        } else line = test;
+      }
+      if (line) ctx.fillText(line, x, y + lines * lineH);
+    };
+    const life = state.life || {};
+    const stories = life.stories || [];
+
+    // Télé de la salle de repos : la chaîne d'info interne
+    s.lounge?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#0b1020";
+      ctx.fillRect(0, 0, W, H);
+      const story = stories.at(-1 - (Math.floor(now / 12000) % Math.max(1, Math.min(4, stories.length))));
+      ctx.fillStyle = "#d00000";
+      ctx.fillRect(0, H - 70, W, 70);
+      ctx.fillStyle = "#fff";
+      ctx.font = font2(22, 900);
+      ctx.fillText("FLASH INFO · QG TV", 14, H - 42);
+      ctx.font = font2(16, 700);
+      ctx.fillText(new Date(now).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), W - 64, H - 42);
+      ctx.fillStyle = "#ffd166";
+      ctx.font = font2(56, 900);
+      ctx.fillText(story?.icon || "📺", 16, 74);
+      ctx.fillStyle = "#fff";
+      ctx.font = font2(22, 800);
+      wrap(ctx, story?.text || "Rien à signaler. Les chats dorment.", 90, 44, W - 104, 28, 4);
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = font2(15, 700);
+      ctx.fillText("EN DIRECT DE LA MACHINE À CAFÉ", 14, H - 14);
+    });
+    s.arcade?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#ffd60a";
+      ctx.font = font2(22, 900);
+      ctx.fillText("PAC-CAT", 22, 34);
+      const x = (now / 40) % (W + 40) - 20;
+      ctx.beginPath();
+      ctx.moveTo(x, 80);
+      ctx.arc(x, 80, 14, 0.4, Math.PI * 2 - 0.4);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      for (let d = 0; d < W; d += 22) if (d > x + 10) ctx.fillRect(d, 78, 4, 4);
+      ctx.font = font2(12, 700);
+      ctx.fillText("HI-SCORE BERTRAND", 18, 112);
+    });
+
+    // Studio marketing : performance pub
+    const adsDone = state.tasks.filter((t) => t.type === "ads" && t.status === "done").length;
+    const designs = state.documents.filter((d) => d.kind === "visual").length;
+    s.ads?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#1a1325";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#ff8a5b";
+      ctx.font = font2(26, 900);
+      ctx.fillText("📈 MARKETING", 18, 40);
+      ctx.fillStyle = "#fff";
+      ctx.font = font2(20, 700);
+      ctx.fillText(`${adsDone} campagne(s) · ${designs} visuel(s)`, 18, 74);
+      ctx.strokeStyle = "#06d6a0";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const x = 18 + (i / 12) * (W - 36);
+        const y = H - 30 - (Math.sin(i * 0.9 + 1) * 0.3 + i / 14) * (H - 130);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#c9cfe6";
+      ctx.font = font2(15, 700);
+      ctx.fillText("ROAS cible : ×2", 18, H - 10);
+    });
+
+    // Juridique : échéances
+    const legalDocs = state.documents.filter((d) => d.kind === "legal").length;
+    const next = state.events.filter((e) => e.start > now).sort((a, b) => a.start - b.start)[0];
+    s.legal?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#101826";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#8fa3bf";
+      ctx.font = font2(26, 900);
+      ctx.fillText("⚖️ ÉCHÉANCES", 18, 40);
+      ctx.fillStyle = "#fff";
+      ctx.font = font2(20, 700);
+      ctx.fillText(`${legalDocs} document(s) juridiques & admin`, 18, 80);
+      ctx.fillStyle = "#c9cfe6";
+      ctx.font = font2(18, 600);
+      ctx.fillText(next ? ellipsis(ctx, `Prochain : ${next.title}`, W - 36) : "Déclaration URSSAF : à vérifier", 18, 120);
+      ctx.fillText("Rien ne se signe sans relire. — Sandrine", 18, H - 20);
+    });
+
+    // Bureau RH : mur des champions
+    const hall = life.hall || [];
+    const champion = hall[0];
+    const nameOf = (id) => state.agents.find((a) => a.id === id);
+    s.hrWall?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#2b1b1e";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#f7c948";
+      ctx.font = font2(28, 900);
+      ctx.fillText("🏆 MUR DES CHAMPIONS", 18, 42);
+      ctx.font = font2(20, 700);
+      if (!hall.length) {
+        ctx.fillStyle = "#f6e7cb";
+        ctx.fillText("Premier employé du mois : à élire !", 18, 96);
+      }
+      hall.slice(0, 5).forEach((h, i) => {
+        ctx.fillStyle = i ? "#f6e7cb" : "#ffd166";
+        ctx.fillText(`${monthLabel(h.key)} — ${h.name} ${"⭐".repeat(Math.min(5, h.stars || 0))}`, 18, 90 + i * 34);
+      });
+    });
+
+    // Totem « Employé du mois »
+    const round = life.round;
+    s.eotm?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#1b1407";
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "#f7c948";
+      ctx.lineWidth = 10;
+      ctx.strokeRect(6, 6, W - 12, H - 12);
+      ctx.fillStyle = "#f7c948";
+      ctx.textAlign = "center";
+      ctx.font = font2(30, 900);
+      ctx.fillText("EMPLOYÉ", W / 2, 52);
+      ctx.fillText("DU MOIS", W / 2, 86);
+      const hero = champion ? nameOf(champion.agentId) : null;
+      if (hero) {
+        ctx.fillStyle = hero.look?.shirt || "#7c6cff";
+        ctx.beginPath();
+        ctx.arc(W / 2, 200, 82, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.font = font2(90, 900);
+        ctx.fillText(hero.name[0], W / 2, 232);
+        ctx.fillStyle = "#fff";
+        ctx.font = font2(38, 900);
+        ctx.fillText(hero.name, W / 2, 330);
+        ctx.fillStyle = "#f6e7cb";
+        ctx.font = font2(22, 700);
+        ctx.fillText(monthLabel(champion.key), W / 2, 366);
+        ctx.fillText("⭐".repeat(Math.min(6, champion.stars || 0)) || "⭐", W / 2, 402);
+      } else {
+        ctx.fillStyle = "#f6e7cb";
+        ctx.font = font2(24, 800);
+        ctx.fillText("ÉLECTION EN COURS", W / 2, 150);
+        ctx.font = font2(26, 800);
+        (round?.nominees || []).slice(0, 3).forEach((id, i) => {
+          const a = nameOf(id);
+          ctx.fillStyle = a?.look?.shirt || "#fff";
+          ctx.fillText(`${a?.name || "?"} · ${"⭐".repeat(round.stars[id] || 0) || "—"}`, W / 2, 210 + i * 56);
+        });
+      }
+      ctx.textAlign = "left";
+    });
+
+    // Panneau « jours sans incident » (spoiler : 0)
+    const lastIncident = Math.max(this.lastIncidentAt || 0, ...stories.filter((st) => st.kind === "incident").map((st) => st.at), 0);
+    const days = lastIncident ? Math.floor((now - lastIncident) / 86400000) : Math.floor((now - (state.createdAt || now)) / 86400000);
+    s.incident?.draw((ctx, W, H) => {
+      ctx.fillStyle = "#fffdf5";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#1b7f3b";
+      ctx.fillRect(0, 0, W, 44);
+      ctx.fillStyle = "#fff";
+      ctx.font = font2(22, 900);
+      ctx.fillText("CE BUREAU EST SANS INCIDENT DEPUIS", 14, 30);
+      ctx.fillStyle = days ? "#1b7f3b" : "#d00000";
+      ctx.font = font2(110, 900);
+      ctx.fillText(String(days), 22, 168);
+      ctx.fillStyle = "#1b1f33";
+      ctx.font = font2(40, 900);
+      ctx.fillText(days > 1 ? "JOURS" : "JOUR", 170, 132);
+      ctx.font = font2(18, 700);
+      ctx.fillStyle = "#6b7280";
+      ctx.fillText(days ? "Continuez comme ça !" : "Bruno, on sait que c'est toi.", 172, 166);
+    });
+
     s.logo.draw((ctx, W, H) => {
       ctx.translate(W / 2, H / 2);
       ctx.fillStyle = "rgba(30,41,59,0.85)";
@@ -1020,6 +1504,7 @@ export class World {
       this.updateTags();
       this.boss.setStatus({ compact });
       for (const npc of this.npcs.values()) npc.person.setStatus({ emoji: npc.person.tagEl.querySelector(".emo").textContent, compact });
+      this.cats?.setCompact(compact);
     }
     // Vue d'ensemble sur petit écran : on masque les panneaux de pôles pour que les pièces restent lisibles.
     const far = compact && this.container.clientWidth < 700;
@@ -1029,6 +1514,14 @@ export class World {
     }
 
     this.life?.tick(nowMs);
+    this.cats?.tick(nowMs);
+    this.cats?.update(dt);
+    this.updateConfetti(dt);
+    for (const item of this.questItems.values()) {
+      item.group.position.y = item.base + Math.abs(Math.sin(t * 2.2)) * 0.05;
+      item.group.rotation.y = t * 0.8;
+      item.sparkle.scale.setScalar(0.6 + Math.abs(Math.sin(t * 4)) * 0.8);
+    }
     for (const actor of this.actors.values()) {
       actor.update();
       actor.person.update(dt, t);

@@ -4,9 +4,10 @@ import { clear, toast, haptic } from "./dom.js";
 import { BASE_PANELS, agentPanel } from "./rooms.js";
 import { DEPT_PANELS } from "./departments.js";
 import { LIFE_PANELS } from "./office-life.js";
+import { SOCIAL_PANELS } from "./social-panels.js";
 import { PANELS } from "../../shared/roster.js";
 
-const ALL_PANELS = { ...BASE_PANELS, ...DEPT_PANELS, ...LIFE_PANELS };
+const ALL_PANELS = { ...BASE_PANELS, ...DEPT_PANELS, ...LIFE_PANELS, ...SOCIAL_PANELS };
 import { taskProgress } from "../../shared/engine.js";
 
 export class Panels {

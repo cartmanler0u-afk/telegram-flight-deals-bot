@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { validateInitData } from "./auth.js";
-import { OfficeError, getDocument, toClientState } from "../../webapp/shared/engine.js";
+import { OfficeError, getDocument, toClientState, publicResult } from "../../webapp/shared/engine.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WEBAPP_DIR = path.resolve(here, "../../webapp");
@@ -65,7 +65,7 @@ export function createOfficeApp({ service, botToken, allowedUserIds = [], ai = {
     const { type, payload } = req.body || {};
     if (typeof type !== "string") throw new OfficeError("Action manquante.");
     const result = req.office.runtime.dispatch(type, payload && typeof payload === "object" ? payload : {});
-    res.json({ ok: true, result: result?.id ? { id: result.id } : null, ...snapshot(req) });
+    res.json({ ok: true, result: publicResult(result), ...snapshot(req) });
   });
 
   api.post("/query", async (req, res) => {

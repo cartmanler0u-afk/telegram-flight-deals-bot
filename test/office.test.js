@@ -15,6 +15,8 @@ import {
   OfficeError,
 } from "../webapp/shared/engine.js";
 import { ROLES, DEPARTMENTS } from "../webapp/shared/roster.js";
+import { publicResult } from "../webapp/shared/engine.js";
+import { HIDING_SPOTS, birthdayOf, lifeBeat, relationsOf, monthKey } from "../webapp/shared/social.js";
 import { setDealSink, shareDeals } from "../src/office/bridge.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { OfficeRuntime } from "../webapp/shared/runtime.js";
@@ -43,8 +45,8 @@ function freshRuntime(generator = createTemplateGenerator({ latencyMs: 0 })) {
 test("l'entreprise de départ est complète et hiérarchisée", () => {
   const state = createInitialState(T0);
   const byId = Object.fromEntries(state.agents.map((a) => [a.id, a]));
-  assert.equal(state.agents.length, 27);
-  assert.equal(new Set(state.agents.map((a) => a.id)).size, 27, "identifiants uniques");
+  assert.equal(state.agents.length, 38);
+  assert.equal(new Set(state.agents.map((a) => a.id)).size, 38, "identifiants uniques");
   for (const agent of state.agents) {
     assert.ok(ROLES[agent.role], `rôle connu pour ${agent.id}`);
     assert.ok(DEPARTMENTS[agent.dept], `pôle connu pour ${agent.id}`);
@@ -58,6 +60,12 @@ test("l'entreprise de départ est complète et hiérarchisée", () => {
   assert.equal(byId.tiktok.managerId, "mgr-prod");
   assert.equal(byId["mgr-tech"].managerId, "director");
   assert.equal(state.agents.filter((a) => a.role === "dealhunter").length, 2, "deux dénicheurs de bons plans");
+  assert.equal(byId.designer.managerId, "mgr-marketing");
+  assert.equal(byId.lawyer.managerId, "director", "pas de manager au juridique : rattaché au directeur");
+  assert.equal(byId.hr.managerId, "director");
+  assert.equal(byId["intern-vente"].managerId, "mgr-vente", "chaque stagiaire a pour tuteur le manager de son pôle");
+  assert.equal(state.agents.filter((a) => a.role === "intern").length, 4);
+  assert.deepEqual(state.life.cats.map((c) => c.name), ["Pixel", "Mochi", "Croquette"]);
   assert.ok(state.agents.some((a) => a.role === "cleaner"), "quelqu'un fait le ménage");
   assert.equal(state.settings.companyName, "Boss Corp");
   assert.equal(state.events.length, 1);
@@ -84,6 +92,13 @@ test("le directeur route chaque mission vers le bon agent", () => {
     "Plan de lancement OFM : recrutement de créatrices": "talent",
     "Shooting photo des nouveaux articles": "photographer",
     "Fais le ménage dans le cache": "cleaner",
+    "Crée un logo pour ma boutique": "designer",
+    "Lance une campagne pub TikTok à 50 €": "growth",
+    "Tableau de bord des ventes du mois": "data",
+    "Rédige mes CGV": "lawyer",
+    "Déclaration URSSAF du trimestre": "admin",
+    "Fiche de poste monteur vidéo freelance": "hr",
+    "Organise un afterwork vendredi": "happiness",
   };
   for (const [text, agentId] of Object.entries(cases)) assert.equal(routeTask(state, text).agentId, agentId, text);
   // Mission confiée à un pôle : un membre du pôle, jamais quelqu'un d'ailleurs.
@@ -259,7 +274,7 @@ test("API de la mini app : authentification, actions, documents", async (t) => {
   assert.equal((await fetch(`${base}/api/state`, { headers: auth(1) })).status, 403);
 
   const first = await (await fetch(`${base}/api/state`, { headers: auth(42) })).json();
-  assert.equal(first.state.agents.length, 27);
+  assert.equal(first.state.agents.length, 38);
   assert.equal(first.state.settings.tzOffset, 120);
   const same = await (await fetch(`${base}/api/state?rev=${first.rev}`, { headers: auth(42) })).json();
   assert.equal(same.unchanged, true);
@@ -371,8 +386,8 @@ function v1State() {
 test("migration v1 → v2 : l'entreprise s'agrandit sans rien perdre", async () => {
   const state = migrateState(v1State(), T0 + 1000);
   const byId = Object.fromEntries(state.agents.map((a) => [a.id, a]));
-  assert.equal(state.version, 2);
-  assert.equal(state.agents.length, 27);
+  assert.equal(state.version, 3);
+  assert.equal(state.agents.length, 38);
   assert.equal(byId.webdev.dept, "tech");
   assert.equal(byId.webdev.managerId, "mgr-tech", "Léo rejoint le studio web de Paul");
   assert.equal(byId["mgr-prod"].dept, "social");
@@ -380,15 +395,17 @@ test("migration v1 → v2 : l'entreprise s'agrandit sans rien perdre", async () 
   assert.equal(state.documents.find((d) => d.title === "Charte").content, "Bleu et or");
   assert.deepEqual(state.deals, []);
   assert.equal(state.settings.companyName, "Cartman Corp");
-  assert.match(state.log.at(-1).text, /s'agrandit : 20 nouveaux collègues/);
-  assert.equal(migrateState(state, T0 + 2000).agents.length, 27, "migration idempotente");
+  assert.match(state.log.at(-1).text, /s'agrandit : 31 nouveaux collègues/);
+  assert.equal(state.version, 3);
+  assert.ok(state.life.round, "l'élection de l'employé du mois démarre");
+  assert.equal(migrateState(state, T0 + 2000).agents.length, 38, "migration idempotente");
 
   // Même chose à travers le service (état sauvegardé en base par l'ancienne version).
   const repository = createMemoryRepository();
   await repository.save("42", v1State());
   const service = new OfficeService({ repository, logger: { log() {}, error() {} } });
   const office = await service.get("42");
-  assert.equal(office.runtime.state.agents.length, 27);
+  assert.equal(office.runtime.state.agents.length, 38);
   await service.stop();
 });
 
@@ -562,4 +579,233 @@ test("générateur Claude : sans recherche web sur le compte, on retente sans l'
   const off = fakeClient([textMessage("ok")]);
   await createClaudeGenerator({ apiKey: "x", model: "claude-haiku-5-5", webSearch: false, client: off }).runTask({ task, agent: hunter, state, now: T0 });
   assert.equal(off.calls[0].params.tools, undefined, "ANTHROPIC_WEB_SEARCH=false");
+});
+
+
+// ---------------------------------------------------------------- v3 : vie sociale
+
+test("migration v2 → v3 : l'aile Est ouvre avec 11 nouveaux collègues et trois chats", () => {
+  const state = createInitialState(T0, { bossName: "Cartman", tzOffset: PARIS });
+  const v3 = ["mgr-marketing", "designer", "growth", "data", "lawyer", "admin", "hr", "happiness", "intern-vente", "intern-social", "intern-tech"];
+  state.agents = state.agents.filter((a) => !v3.includes(a.id));
+  state.version = 2;
+  delete state.life;
+  applyAction(state, "task.create", { title: "Annonce Vinted", agentId: "vinted" }, T0);
+  migrateState(state, T0 + 1000);
+  assert.equal(state.version, 3);
+  assert.equal(state.agents.length, 38);
+  assert.match(state.log.at(-1).text, /aile Est : 11 nouveaux collègues/);
+  assert.equal(state.tasks[0].agentId, "vinted");
+  assert.equal(state.life.cats.length, 3);
+  assert.ok(Object.keys(state.life.relations).length >= 10, "relations de départ");
+  assert.equal(state.agents.find((a) => a.id === "intern-tech").managerId, "mgr-tech");
+});
+
+test("vie sociale : potins réguliers, déterministes, et anniversaires", () => {
+  const a = createInitialState(T0, { tzOffset: PARIS });
+  const b = createInitialState(T0, { tzOffset: PARIS });
+  const startStories = a.life.stories.length;
+  assert.ok(startStories >= 5, "quelques potins de départ");
+  for (let i = 1; i <= 40; i++) {
+    advance(a, T0 + i * 3 * 3600000);
+    advance(b, T0 + i * 3 * 3600000);
+  }
+  assert.ok(a.life.stories.length > startStories + 15, "la vie suit son cours");
+  assert.deepEqual(a.life.stories.map((st) => st.text), b.life.stories.map((st) => st.text), "même graine, même histoire");
+  // Anniversaire : le jour J, un potin est publié une seule fois.
+  const agent = a.agents.find((x) => x.id === "vinted");
+  const bd = birthdayOf(agent);
+  const year = new Date(T0).getUTCFullYear() + 1;
+  const day = Date.UTC(year, bd.month, bd.day, 8, 0);
+  advance(a, day);
+  advance(a, day + 3600000);
+  assert.equal(a.life.stories.filter((st) => st.kind === "birthday" && st.ids.includes("vinted") && st.at >= day).length, 1);
+});
+
+test("vie sociale : pas de romance avec le patron, les stagiaires ni entre manager et équipe", () => {
+  const state = createInitialState(T0);
+  for (let i = 0; i < 400; i++) lifeBeat(state, T0 + i * 7 * 3600000);
+  const byId = Object.fromEntries(state.agents.map((x) => [x.id, x]));
+  for (const rel of Object.values(state.life.relations)) {
+    if (!["crush", "couple"].includes(rel.kind) || rel.since === T0) continue;
+    const [x, y] = [byId[rel.a], byId[rel.b]];
+    if (!x || !y) continue;
+    assert.ok(![x.role, y.role].includes("director"), `${rel.a}/${rel.b}`);
+    assert.ok(![x.role, y.role].includes("intern"), `${rel.a}/${rel.b}`);
+    assert.ok(x.managerId !== y.id && y.managerId !== x.id, `${rel.a}/${rel.b}`);
+  }
+  for (const id of state.agents.map((x) => x.id)) {
+    assert.ok(relationsOf(state, id).filter((r) => r.kind === "couple").length <= 1, `${id} n'a qu'un couple à la fois`);
+  }
+});
+
+function solveAll(state, now) {
+  const round = state.life.round;
+  for (const quest of round.quests) {
+    if (quest.status !== "open") continue;
+    if (quest.kind === "mystery") {
+      applyAction(state, "quest.clue", { questId: quest.id }, now);
+      applyAction(state, "quest.solve", { questId: quest.id, answer: quest.secret.culpritId }, now);
+    } else if (quest.kind === "seek") {
+      assert.throws(() => applyAction(state, "quest.solve", { questId: quest.id, answer: "nulle-part" }, now), /pas ici/);
+      applyAction(state, "quest.solve", { questId: quest.id, answer: quest.spotId }, now);
+    } else if (quest.kind === "mediation") {
+      applyAction(state, "quest.solve", { questId: quest.id, answer: quest.secret.answer }, now);
+    } else if (quest.kind === "quiz") {
+      applyAction(state, "quest.solve", { questId: quest.id, answer: quest.secret.answers }, now);
+    }
+  }
+}
+
+test("employé du mois : quêtes, cérémonie, mur des champions et nouvelle édition", async () => {
+  const { runtime, state, advanceBy, now } = freshRuntime();
+  const round = state.life.round;
+  assert.equal(round.nominees.length, 3);
+  assert.equal(round.quests.length, 6);
+  assert.ok(!round.nominees.includes("director"), "Victor ne peut pas être nominé");
+  for (const q of round.quests.filter((x) => x.kind === "seek")) assert.ok(HIDING_SPOTS.some((sp) => sp.id === q.spotId));
+
+  // Le client ne voit jamais les solutions des quêtes ouvertes.
+  const client = JSON.stringify(toClientState(state).life.round);
+  assert.ok(!client.includes("culpritId") && !client.includes('"answers"') && !client.includes('"secret"'));
+  assert.throws(() => runtime.dispatch("eotm.ceremony"), /3 quêtes/);
+
+  solveAll(state, now());
+  // Missions des nominés : elles se valident toutes seules quand le travail est livré.
+  for (const quest of round.quests.filter((q) => q.kind === "mission")) {
+    for (let i = 0; i < quest.target; i++) runtime.dispatch("task.create", { title: `Mission ${i} pour la quête`, agentId: quest.nomineeId });
+  }
+  for (let i = 0; i < 12; i++) {
+    await flush();
+    advanceBy(60000);
+  }
+  assert.ok(round.quests.every((q) => q.status === "solved"), round.quests.map((q) => `${q.kind}:${q.status}`).join(" "));
+  const best = Math.max(...round.nominees.map((id) => round.stars[id]));
+
+  const result = runtime.dispatch("eotm.ceremony");
+  assert.deepEqual(Object.keys(publicResult(result)).sort(), ["name", "stars", "winnerId"]);
+  assert.equal(round.stars[result.winnerId], best);
+  assert.equal(state.life.hall[0].agentId, result.winnerId);
+  assert.equal(state.agents.find((a) => a.id === result.winnerId).stats.eotm, 1);
+  assert.ok(state.life.stories.some((st) => st.kind === "ceremony"));
+  assert.throws(() => runtime.dispatch("eotm.ceremony"), /déjà eu lieu/);
+
+  const next = runtime.dispatch("eotm.next");
+  assert.equal(next.edition, 2);
+  assert.equal(state.life.round.winnerId, null);
+});
+
+test("employé du mois : mauvaise accusation, indices et résultat public", () => {
+  const state = createInitialState(T0);
+  const mystery = state.life.round.quests.find((q) => q.kind === "mystery") || null;
+  if (!mystery) return;
+  const clue = applyAction(state, "quest.clue", { questId: mystery.id }, T0);
+  assert.deepEqual(publicResult(clue), mystery.clues[0]);
+  const innocent = mystery.suspects.find((id) => id !== mystery.secret.culpritId);
+  const res = publicResult(applyAction(state, "quest.solve", { questId: mystery.id, answer: innocent }, T0));
+  assert.equal(res.success, false);
+  assert.match(res.message, /C'était/);
+  assert.equal(mystery.status, "failed");
+  assert.throws(() => applyAction(state, "quest.solve", { questId: mystery.id, answer: mystery.secret.culpritId }, T0), /déjà terminée/);
+  assert.ok(toClientState(state).life.round.quests.find((q) => q.id === mystery.id).solution, "la solution est révélée une fois la quête close");
+});
+
+test("employé du mois : au changement de mois, cérémonie automatique et nouvelle élection", () => {
+  const state = createInitialState(T0, { tzOffset: PARIS });
+  const first = state.life.round;
+  const seek = first.quests.find((q) => q.kind === "seek") || first.quests.find((q) => q.kind !== "mission");
+  if (seek.kind === "seek") applyAction(state, "quest.solve", { questId: seek.id, answer: seek.spotId }, T0);
+  const nextMonth = Date.UTC(2026, 10, 2, 9, 0);
+  advance(state, nextMonth);
+  assert.equal(state.life.round.key, monthKey(state, nextMonth));
+  assert.notEqual(state.life.round.id, first.id);
+  if (seek.kind === "seek") assert.equal(state.life.hall[0].agentId, seek.nomineeId, "le seul nominé étoilé est élu");
+});
+
+test("chats du bureau : adoption, repas, câlins ; stagiaires : CDI", () => {
+  const state = createInitialState(T0);
+  const cat = applyAction(state, "cat.adopt", { name: "Biscotte", coat: "cream" }, T0);
+  assert.equal(cat.coat, "cream");
+  assert.throws(() => applyAction(state, "cat.adopt", { name: "" }, T0), /nom/);
+  applyAction(state, "cat.adopt", { name: "Sushi" }, T0);
+  assert.throws(() => applyAction(state, "cat.adopt", { name: "Un de trop" }, T0), /maximum/);
+  applyAction(state, "cat.feed", { catId: cat.id }, T0);
+  assert.throws(() => applyAction(state, "cat.feed", { catId: cat.id }, T0 + 60000), /déjà mangé/);
+  applyAction(state, "cat.feed", { catId: cat.id }, T0 + 3 * 3600000);
+  applyAction(state, "cat.pet", { catId: cat.id }, T0);
+  assert.equal(cat.pets, 1);
+  applyAction(state, "cat.rename", { catId: cat.id, name: "Biscotte II" }, T0);
+  assert.equal(state.life.cats.find((c) => c.id === cat.id).name, "Biscotte II");
+
+  assert.throws(() => applyAction(state, "intern.hire", { agentId: "vinted", role: "vinted" }, T0), /stagiaire/);
+  assert.throws(() => applyAction(state, "intern.hire", { agentId: "intern-tech", role: "manager" }, T0), /vrai poste/);
+  const sacha = applyAction(state, "intern.hire", { agentId: "intern-tech", role: "automation" }, T0);
+  assert.equal(sacha.role, "automation");
+  assert.equal(sacha.managerId, "mgr-tech");
+  assert.ok(state.life.stories.at(-1).text.includes("CDI"));
+
+  const intern = applyAction(state, "agent.hire", { role: "intern", dept: "marketing", name: "Nour" }, T0);
+  assert.equal(intern.dept, "marketing");
+  assert.equal(intern.managerId, "mgr-marketing");
+});
+
+test("API : les quêtes renvoient leur résultat au client", async (t) => {
+  const token = "999:TEST";
+  const service = new OfficeService({ repository: createMemoryRepository(), logger: { log() {}, error() {} } });
+  await service.start();
+  const app = createOfficeApp({ service, botToken: token, allowedUserIds: ["42"], logger: { error() {} } });
+  const server = app.listen(0);
+  t.after(async () => {
+    server.close();
+    await service.stop();
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Authorization: `tma ${signInitData({ user: JSON.stringify({ id: 42, first_name: "Boss" }), auth_date: String(Math.floor(Date.now() / 1000)) }, token)}`, "Content-Type": "application/json" };
+  const { state } = await (await fetch(`${base}/api/state`, { headers })).json();
+  const seek = state.life.round.quests.find((q) => q.kind === "seek");
+  assert.equal(seek.secret, undefined);
+  const wrong = await fetch(`${base}/api/action`, { method: "POST", headers, body: JSON.stringify({ type: "quest.solve", payload: { questId: seek.id, answer: "frigo" } }) });
+  assert.equal(wrong.status, 400);
+  const ok = await (await fetch(`${base}/api/action`, { method: "POST", headers, body: JSON.stringify({ type: "quest.solve", payload: { questId: seek.id, answer: seek.spotId } }) })).json();
+  assert.equal(ok.result.success, true);
+  assert.equal(ok.result.stars, 1);
+  assert.match(ok.result.message, /Trouvé|retrouvé/);
+});
+
+test("modèles des nouveaux métiers : visuel, pub, data, juridique, RH", async () => {
+  const { runtime, state, advanceBy } = freshRuntime();
+  const kinds = {
+    "Crée un logo pour ma boutique": "visual",
+    "Lance une campagne pub TikTok à 50 €": "campaign",
+    "Tableau de bord des ventes du mois": "dashboard",
+    "Rédige mes CGV": "legal",
+    "Fiche de poste monteur vidéo freelance": "hr",
+  };
+  const tasks = Object.keys(kinds).map((title) => runtime.dispatch("task.create", { title }));
+  await flush();
+  advanceBy(10 * 60000);
+  tasks.forEach((task, i) => {
+    const doc = state.documents.find((d) => d.id === task.docId);
+    assert.equal(doc.kind, Object.values(kinds)[i], task.title);
+  });
+  assert.match(state.documents.find((d) => d.kind === "legal").content, /faire valider par un professionnel/);
+});
+
+test("employé du mois : la médiation réconcilie vraiment les collègues", () => {
+  let state = null;
+  let quest = null;
+  for (const name of ["Ana", "Bob", "Cléo", "Dan", "Eve", "Fanny", "Gus", "Hana", "Ivo", "Jo", "Kim", "Léa"]) {
+    state = createInitialState(T0, { bossName: name });
+    quest = state.life.round.quests.find((q) => q.kind === "mediation");
+    if (quest) break;
+  }
+  assert.ok(quest, "une médiation finit par être tirée au sort");
+  assert.equal(quest.options.length, 3);
+  assert.equal(quest.options.filter((o) => o.id === quest.secret.answer).length, 1);
+  const before = relationsOf(state, quest.nomineeId).find((r) => r.other === quest.otherId);
+  if (quest.prevKind !== "couple") assert.equal(before.kind, "rival", "la brouille est réelle");
+  const res = publicResult(applyAction(state, "quest.solve", { questId: quest.id, answer: quest.secret.answer }, T0));
+  assert.equal(res.success, true);
+  const after = relationsOf(state, quest.nomineeId).find((r) => r.other === quest.otherId);
+  assert.ok(["ami", "bff", "couple"].includes(after.kind));
 });

@@ -242,7 +242,8 @@ export class Person {
     // Étiquette au-dessus de la tête
     this.tagEl = document.createElement("div");
     this.tagEl.className = `tag${isBoss ? " boss" : ""}`;
-    this.tagEl.innerHTML = `<div class="tag-bubble" hidden></div><div class="tag-pill"><span class="emo"></span><span class="dot"></span><span class="tag-name"></span></div><div class="tag-bar" hidden><i></i></div>`;
+    this.tagEl.innerHTML = `<div class="tag-bubble" hidden></div><div class="tag-pill"><span class="emo"></span><span class="dot"></span><span class="tag-name"></span><span class="tag-badge" hidden></span></div><div class="tag-bar" hidden><i></i></div>`;
+    this.tagEl.style.setProperty("--who", look.shirt || "#7c6cff");
     this.tagEl.querySelector(".dot").style.background = look.shirt || "#fff";
     if (onClick) {
       this.tagEl.addEventListener("pointerup", (e) => {
@@ -278,18 +279,47 @@ export class Person {
     this.tagEl.classList.toggle("compact", compact);
   }
 
-  say(text, ms = 3500) {
+  setBadge(text) {
+    const badge = this.tagEl.querySelector(".tag-badge");
+    badge.hidden = !text;
+    badge.textContent = text || "";
+  }
+
+  // Bulle de dialogue. prio : 0 bavardage, 1 normal, 2 important (toujours affiché).
+  say(text, ms = 3500, prio = 1) {
+    if (Person.gate && !Person.gate(this, prio)) return false;
     const bubble = this.tagEl.querySelector(".tag-bubble");
     bubble.textContent = text;
     bubble.hidden = false;
+    bubble.classList.remove("out");
+    bubble.classList.toggle("important", prio >= 2);
+    this.bubblePrio = prio;
+    this.bubbleSince = performance.now();
+    this.bubbleUntil = this.bubbleSince + ms;
     clearTimeout(this.bubbleTimer);
+    this.bubbleTimer = setTimeout(() => this.hideBubble(), ms);
+    return true;
+  }
+
+  hideBubble() {
+    const bubble = this.tagEl.querySelector(".tag-bubble");
+    this.bubbleUntil = 0;
+    clearTimeout(this.bubbleTimer);
+    if (bubble.hidden) return;
+    bubble.classList.add("out");
     this.bubbleTimer = setTimeout(() => {
       bubble.hidden = true;
-    }, ms);
+      bubble.classList.remove("out");
+      bubble.style.removeProperty("--lift");
+    }, 220);
+  }
+
+  get talking() {
+    return (this.bubbleUntil || 0) > performance.now();
   }
 
   place(spot) {
-    this.root.position.set(spot.x, 0, spot.z);
+    this.root.position.set(spot.x, spot.y || 0, spot.z);
     this.heading = spot.facing ?? 0;
     this.root.rotation.y = this.heading;
     this.path = [];
@@ -298,6 +328,7 @@ export class Person {
   }
 
   walk(path, target, onArrive = null) {
+    this.root.position.y = 0;
     this.path = path.slice();
     this.target = target;
     this.onArrive = onArrive;
@@ -329,6 +360,12 @@ export class Person {
       }
       if (!this.path.length) {
         this.pose = this.target && !this.target.standing && !this.target.stand ? "sit" : "stand";
+        if (this.target) {
+          // Dernier pas jusqu'au point exact (tapis de course, pouf…), éventuellement surélevé.
+          p.x = this.target.x;
+          p.z = this.target.z;
+          p.y = this.target.y || 0;
+        }
         const cb = this.onArrive;
         this.onArrive = null;
         cb?.();
@@ -392,6 +429,16 @@ export class Person {
         armRx = -0.9 + Math.max(0, Math.sin(ph * 1.3)) * -0.5;
         headX = Math.sin(ph * 2.6) * 0.07;
         headY = Math.sin(ph * 0.6) * 0.35;
+      } else if (this.activity === "game") {
+        armLx = -1.25 + Math.sin(ph * 9) * 0.05;
+        armRx = -1.25 + Math.sin(ph * 11 + 1) * 0.05;
+        headX = 0.05;
+        torsoX = Math.sin(ph * 1.7) * 0.08;
+      } else if (this.activity === "relax") {
+        armLx = armRx = -0.35;
+        torsoX = -0.25;
+        headX = -0.1;
+        headY = Math.sin(ph * 0.3) * 0.2;
       } else {
         armLx = armRx = -0.75;
         headY = Math.sin(ph * 0.4) * 0.25;
@@ -459,6 +506,59 @@ export class Person {
         armRx = -2.3;
         armLx = -1.0;
         this.armR.shoulder.rotation.z = 0.2;
+      } else if (this.activity === "run") {
+        const s = Math.sin(ph * 13);
+        thighL = s * 0.75;
+        thighR = -s * 0.75;
+        kneeL = Math.max(0, -s) * 1.1 + 0.2;
+        kneeR = Math.max(0, s) * 1.1 + 0.2;
+        armLx = -s * 0.8 - 0.3;
+        armRx = s * 0.8 - 0.3;
+        bodyY = Math.abs(Math.cos(ph * 13)) * 0.06;
+        torsoX = 0.12;
+      } else if (this.activity === "yoga") {
+        const hold = Math.sin(ph * 0.5) > 0;
+        armLx = armRx = -3.0;
+        this.armL.shoulder.rotation.z = -0.15;
+        this.armR.shoulder.rotation.z = 0.15;
+        thighR = hold ? -0.6 : 0;
+        kneeR = hold ? 1.6 : 0;
+        headX = -0.1;
+      } else if (this.activity === "karate") {
+        const k = Math.sin(ph * 5);
+        const kick = k > 0.6;
+        thighR = kick ? -1.4 : -0.2;
+        kneeR = kick ? 0.1 : 0.4;
+        thighL = 0.15;
+        kneeL = 0.3;
+        armRx = kick ? -0.3 : -1.6 + Math.max(0, Math.sin(ph * 10)) * -0.4;
+        armLx = -1.4;
+        bodyY = -0.06;
+      } else if (this.activity === "pet") {
+        bodyY = -0.28;
+        thighL = thighR = -1.2;
+        kneeL = kneeR = 1.9;
+        torsoX = 0.45;
+        armRx = -1.0 + Math.sin(ph * 4) * 0.25;
+        armLx = -0.5;
+        headX = 0.35;
+      } else if (this.activity === "hug") {
+        armLx = armRx = -1.5;
+        this.armL.shoulder.rotation.z = 0.35;
+        this.armR.shoulder.rotation.z = -0.35;
+        headX = 0.1;
+      } else if (this.activity === "punch") {
+        const p1 = Math.max(0, Math.sin(ph * 9));
+        const p2 = Math.max(0, Math.sin(ph * 9 + Math.PI));
+        armRx = -1.55 - p1 * 0.1;
+        armLx = -1.55 - p2 * 0.1;
+        this.armR.shoulder.rotation.z = -0.2 - p1 * 0.2;
+        this.armL.shoulder.rotation.z = 0.2 + p2 * 0.2;
+        torsoX = 0.1;
+      } else if (this.activity === "lift") {
+        const up = (Math.sin(ph * 2.5) + 1) / 2;
+        armLx = armRx = -0.4 - up * 2.2;
+        bodyY = -up * 0.03;
       }
     }
 
@@ -469,9 +569,9 @@ export class Person {
     legR.knee.rotation.x = kneeR;
     armL.shoulder.rotation.x = armLx;
     armR.shoulder.rotation.x = armRx;
-    const customZ = ["wave", "phone", "write", "clap", "shock", "film"].includes(this.activity);
+    const customZ = ["wave", "phone", "write", "clap", "shock", "film", "yoga", "hug", "punch"].includes(this.activity);
     if (!customZ) armR.shoulder.rotation.z = 0.08;
-    if (!["clap", "shock"].includes(this.activity)) armL.shoulder.rotation.z = -0.08;
+    if (!["clap", "shock", "yoga", "hug", "punch"].includes(this.activity)) armL.shoulder.rotation.z = -0.08;
     head.rotation.x = headX;
     head.rotation.y = headY;
     torso.rotation.x = torsoX;

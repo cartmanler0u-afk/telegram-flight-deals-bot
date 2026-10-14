@@ -36,15 +36,36 @@ export function haptic(kind = "light") {
   }
 }
 
+const TOAST_ICONS = { success: "✅", error: "⚠️", info: "💬", quest: "🏆" };
+const LEADING_EMOJI = /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u;
+
+// Notification courte : icône à gauche, texte propre, doublons regroupés (×2, ×3…).
 export function toast(message, kind = "info", ms = 3200) {
   const root = document.getElementById("toasts");
-  const el = h("div", { class: `toast ${kind}` }, message);
-  root.append(el);
-  while (root.children.length > 3) root.firstElementChild.remove();
-  setTimeout(() => {
+  const text = String(message);
+  const dismiss = (el) => {
+    clearTimeout(el.timer);
     el.classList.add("leave");
     setTimeout(() => el.remove(), 320);
-  }, ms);
+  };
+  const same = [...root.children].find((el) => el.dataset.text === text && !el.classList.contains("leave"));
+  if (same) {
+    const n = Number(same.dataset.count || 1) + 1;
+    same.dataset.count = String(n);
+    same.querySelector(".t-count").textContent = `×${n}`;
+    clearTimeout(same.timer);
+    same.timer = setTimeout(() => dismiss(same), ms);
+    return;
+  }
+  const m = LEADING_EMOJI.exec(text);
+  const el = h("div", { class: `toast ${kind}`, dataset: { text } },
+    h("span", { class: "t-icon" }, m ? m[1] : TOAST_ICONS[kind] || "💬"),
+    h("span", { class: "t-body" }, m ? text.slice(m[0].length) : text),
+    h("span", { class: "t-count" }));
+  el.addEventListener("click", () => dismiss(el));
+  root.append(el);
+  while (root.children.length > 3) root.firstElementChild.remove();
+  el.timer = setTimeout(() => dismiss(el), ms);
   if (kind === "error") haptic("error");
 }
 

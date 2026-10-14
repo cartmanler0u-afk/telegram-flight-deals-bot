@@ -3,11 +3,18 @@
 // Partagé tel quel entre le serveur Node et le mode démo du navigateur.
 
 import { ROLES, DEFAULT_AGENTS, TASK_TYPES, PRIORITIES, DEPARTMENTS, DOC_KINDS, HIRE_LOOKS, TRAITS, roleOf } from "./roster.js";
+import {
+  initLife, advanceLife, lifeForClient, addStory, adoptCat, renameCat, feedCat, petCat, hireIntern,
+  revealClue, solveQuest, holdCeremony, nextRound,
+} from "./social.js";
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
+
+// Collègues arrivés avec la v3 (nouvelle aile Est).
+const V3_AGENT_IDS = ["mgr-marketing", "designer", "growth", "data", "lawyer", "admin", "hr", "happiness", "intern-vente", "intern-social", "intern-tech"];
 
 export const LIMITS = {
-  agents: 40,
+  agents: 60,
   queuedPerAgent: 8,
   activeTasks: 40,
   finishedTasks: 200,
@@ -62,7 +69,13 @@ Toute l'équipe est en place, organisée en pôles :
 - **📱 Social & Contenu** — Manon (manager), Yanis (Snapchat), Sofia (Telegram), Enzo (montage TikTok), Zoé (rédaction).
 - **🌐 Web & Tech** — Paul (lead), Léo (sites web), Max (bots & automatisations).
 - **💎 Pôle Créateurs** — Chloé prépare le lancement de l'activité OFM.
-- **🗂️ Organisation** — Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (comptes rendus), Bruno (compta), Josiane (entretien : elle vide la corbeille et nettoie le cache) et Kylian, le stagiaire.
+- **🎨 Marketing & Création** — Margaux (manager), Nina (graphiste), Malik (pub & growth), Rose (data).
+- **⚖️ Juridique & Admin** — Sandrine (juriste) et Gilles (démarches administratives).
+- **🤝 RH & Vie d'équipe** — Gérard (RH, Victor ne l'aime pas) et Amandine (ambiance… et chats).
+- **🗂️ Organisation** — Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (comptes rendus), Bruno (compta), Josiane (entretien : elle vide la corbeille et nettoie le cache).
+- **🧃 Les stagiaires** — Kylian, Lina, Théo et Sacha : enthousiasme illimité, expérience limitée.
+
+Dans l'aile Est : la **salle de repos** et ses trois chats (Pixel, Mochi, Croquette), la salle de sport et le bureau RH, où se joue chaque mois l'élection de l'**employé du mois** (des petites quêtes à résoudre !).
 
 Touche une pièce ou un employé pour ouvrir son tableau de bord. Les missions **hautes** ou **critiques** passent toujours par ta validation. Et ne t'étonne pas si l'agrafeuse de Bertrand finit dans la gelée.`;
 
@@ -103,11 +116,12 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
     start,
     durationMin: 30,
     isMeeting: true,
-    attendees: ["director", "deputy", "mgr-vente", "mgr-sourcing", "mgr-prod", "mgr-tech", "mgr-orga"],
+    attendees: ["director", "deputy", "mgr-vente", "mgr-sourcing", "mgr-prod", "mgr-tech", "mgr-orga", "mgr-marketing"],
     remindMinutes: 15,
   }, now);
 
   log(state, now, "director", "Le QG ouvre ses portes : toute l'équipe est à son poste !", "🎉");
+  initLife(state, now);
   return state;
 }
 
@@ -155,12 +169,23 @@ export function migrateState(state, now = Date.now()) {
     for (const agent of state.agents) agent.managerId = defaultManagerId(state, agent);
     if (added.length) log(state, now, "director", `L'entreprise s'agrandit : ${added.length} nouveaux collègues arrivent (${added.map((a) => a.name).join(", ")}) !`, "🏢");
   }
+  if (from < 3) {
+    // v3 : nouvelle aile Est (marketing, juridique, RH, stagiaires, salle de repos et chats).
+    const existing = new Set(state.agents.map((a) => a.id));
+    const added = DEFAULT_AGENTS.filter((d) => V3_AGENT_IDS.includes(d.id) && !existing.has(d.id)).map((d) => builtinAgent(d, now));
+    state.agents.push(...added);
+    for (const agent of added) agent.managerId = defaultManagerId(state, agent);
+    for (const agent of state.agents) if (!agent.managerId && agent.role !== "director") agent.managerId = defaultManagerId(state, agent);
+    if (added.length) log(state, now, "director", `Ouverture de l'aile Est : ${added.length} nouveaux collègues (${added.map((a) => a.name).join(", ")}) et trois chats !`, "🐈");
+    initLife(state, now);
+  }
   for (const agent of state.agents) {
     agent.stats ||= { done: 0 };
     agent.traits ||= [];
     if (agent.managerId === undefined) agent.managerId = defaultManagerId(state, agent);
   }
   state.version = STATE_VERSION;
+  initLife(state, now);
   return state;
 }
 
@@ -256,13 +281,20 @@ const ROUTES = [
   { role: "photographer", re: /(photo|shooting|packshot|retouch|lumiere|fond blanc)/g, why: "il faut des photos produit" },
   { role: "logistics", re: /(colis|expedi|envoi|mondial relay|colissimo|emball|livraison|etiquette|transporteur|stock physique)/g, why: "c'est de la logistique" },
   { role: "support", re: /(\bsav\b|client|litige|reclamation|retour|rembours|avis negatif|acheteur mecontent)/g, why: "c'est du service client" },
+  { role: "designer", re: /(logo|miniature|visuel|banniere|charte graphique|identite visuelle|affiche|flyer|thumbnail|\bdesign|moodboard|graphis)/g, weight: 2, why: "c'est un travail de graphisme" },
+  { role: "growth", re: /(\bpubs?\b|publicite|\bads\b|campagne|ciblage|roas|acquisition|tunnel de vente|sponsoris|influenceu)/g, weight: 2, why: "c'est de la publicité / growth" },
+  { role: "data", re: /(\bkpis?\b|statisti|\bstats\b|tableau de bord|dashboard|reporting|analyse (des|de la|de mes) (ventes|chiffres|stats|perf)|prevision)/g, weight: 2, why: "c'est de l'analyse de données" },
+  { role: "lawyer", re: /(\bcgv\b|\bcgu\b|mentions legales|contrat|juridique|\brgpd\b|statuts|propriete intellectuelle|droit d'auteur|clause|avocat|\blegal)/g, weight: 2, why: "c'est une question juridique" },
+  { role: "admin", re: /(administrati|demarche|courrier|paperasse|attestation|kbis|impots|declaration|assurance|mutuelle|\bbanque)/g, why: "c'est de l'administratif" },
+  { role: "hr", re: /(recrut|fiche de poste|embauch|entretien d'embauche|onboarding|integration d|freelance|\brh\b|ressources humaines|stagiaire)/g, weight: 2, why: "c'est un sujet RH" },
+  { role: "happiness", re: /(team building|afterwork|seminaire|ambiance|evenement d'equipe|soiree d'equipe|pot de|anniversaire|bien-etre|les chats)/g, weight: 2, why: "c'est pour la vie d'équipe" },
   { role: "dealhunter", re: /(bons? plans?|erreur de prix|code promo|pepite)/g, weight: 2, why: "c'est une chasse aux bons plans" },
   { role: "dealhunter", re: /(promo|\bdeal|\bvols?\b|billet|reduction|soldes|black friday)/g, why: "c'est une chasse aux bons plans" },
   { role: "sourcer", re: /(sourc|fournisseur|grossiste|\blots?\b|friperie|destockage|aliexpress|alibaba|1688|marchandise)/g, why: "c'est du sourcing" },
   { role: "tiktok", re: /(tiktok|montage|video|\breels?\b|shorts?|\bmonte\b|hook|sous-titr)/g, why: "c'est du montage vidéo" },
   { role: "snap", re: /(snap|snapchat|story|stories|spotlight)/g, why: "c'est pour Snapchat" },
   { role: "telegram", re: /(telegram|canal|channel|groupe prive|drop)/g, why: "c'est pour les canaux Telegram" },
-  { role: "talent", re: /(\bofm\b|onlyfans|\bmym\b|createur|creatrice|talent|modele|agence de creat)/g, why: "ça concerne le pôle créateurs" },
+  { role: "talent", re: /(\bofm\b|onlyfans|\bmym\b|createur|creatrice|talent|modele|agence de creat)/g, weight: 2, why: "ça concerne le pôle créateurs" },
   { role: "accountant", re: /(compta|calcul|marge|chiffre d'?affaire|\bca\b|budget|facture|depense|tresorerie|benefice|rentab|urssaf|tva)/g, why: "c'est de la finance" },
   { role: "cleaner", re: /(menage|nettoi|nettoy|\bcache\b|corbeille|range le bureau)/g, why: "c'est pour l'entretien" },
   { role: "deputy", re: /(process|procedure|\bsop\b|checklist|reglement|discipline|organisation interne)/g, why: "c'est une question de process" },
@@ -271,7 +303,7 @@ const ROUTES = [
   { role: "librarian", re: /(rang|class|archiv|inventaire|biblio|document|fichier|retrouv|\btri|sauvegard)/g, why: "ça touche aux archives" },
   { role: "writer", re: /(redig|article|\bpost\b|newsletter|texte|slogan|copywriting|linkedin|instagram|e-?mail|description)/g, why: "c'est de la rédaction" },
   { role: "director", re: /(decision|strateg|arbitr)/g, weight: 2, why: "c'est un dossier stratégique" },
-  { role: "director", re: /(priorit|recrut|investi|important|urgent|risque|business plan|objectif)/g, why: "c'est un dossier stratégique" },
+  { role: "director", re: /(priorit|investi|important|urgent|risque|business plan|objectif)/g, why: "c'est un dossier stratégique" },
   { role: "manager", re: /(rapport d'?equipe|charge de travail|\bequipe\b|organisation du pole)/g, why: "c'est un sujet d'équipe" },
 ];
 
@@ -279,7 +311,8 @@ const ROLE_FALLBACK = {
   writer: "scribe", analyst: "director", manager: "director", automation: "webdev", photographer: "vinted",
   logistics: "vinted", support: "vinted", dealhunter: "sourcer", sourcer: "dealhunter", snap: "writer",
   telegram: "writer", tiktok: "writer", talent: "director", accountant: "director", deputy: "director",
-  cleaner: "intern", intern: "analyst", vinted: "writer",
+  cleaner: "intern", intern: "analyst", vinted: "writer", designer: "writer", growth: "writer", data: "accountant",
+  lawyer: "deputy", admin: "secretary", hr: "deputy", happiness: "intern",
 };
 
 function leastLoaded(state, role, dept = null) {
@@ -831,7 +864,7 @@ export function hireAgent(state, { name, role, dept }, now) {
     id: uid(state, "ag"),
     name: clampStr(name, 24) || pick(FIRST_NAMES, seed),
     role,
-    dept: role === "manager" ? (DEPARTMENTS[dept] ? dept : "vente") : def.dept,
+    dept: role === "manager" ? (DEPARTMENTS[dept] ? dept : "vente") : role === "intern" && DEPARTMENTS[dept] ? dept : def.dept,
     traits: [pick(TRAITS, seed >> 2), pick(TRAITS, seed >> 11)].filter((t, i, arr) => arr.indexOf(t) === i),
     look: {
       skin: pick(HIRE_LOOKS.skin, seed),
@@ -849,6 +882,7 @@ export function hireAgent(state, { name, role, dept }, now) {
   agent.managerId = defaultManagerId(state, agent);
   const manager = findAgent(state, agent.managerId);
   log(state, now, agent.id, `Bienvenue à ${agent.name}, ${def.label.toLowerCase()}${manager ? `, rattaché·e à ${manager.name}` : ""} !`, "🤝");
+  if (state.life) addStory(state, now, { icon: "👋", kind: "hire", ids: [agent.id], text: `Nouvelle recrue : ${agent.name} (${def.label.toLowerCase()}). ${role === "intern" ? "Quelqu'un peut lui montrer où est la machine à café ?" : "Bertrand prépare déjà son badge."}` });
   return agent;
 }
 
@@ -879,6 +913,10 @@ export function fireAgent(state, { agentId }, now) {
     task.startedAt = null;
   }
   for (const ev of state.events) ev.attendees = ev.attendees.filter((id) => id !== agent.id);
+  if (state.life) {
+    for (const key of Object.keys(state.life.relations)) if (key.split("|").includes(agent.id)) delete state.life.relations[key];
+    addStory(state, now, { icon: "📦", kind: "leave", ids: [], text: `${agent.name} quitte l'entreprise. Pot de départ ce soir, ${agent.name} repart avec son agrafeuse.` });
+  }
   log(state, now, "director", `${agent.name} quitte le QG. Ses dossiers ont été redistribués.`, "👋");
   return agent;
 }
@@ -916,6 +954,14 @@ export function attachBrief(state, markdown, now) {
   return doc;
 }
 
+// Ce qu'une action renvoie au client : l'identifiant créé, ou un résultat public explicite
+// (quêtes, cérémonie…), jamais l'objet interne complet.
+export function publicResult(result) {
+  if (!result || typeof result !== "object") return null;
+  if (result.public) return result.public;
+  return result.id ? { id: result.id } : null;
+}
+
 // ---------------------------------------------------------------------------
 // Point d'entrée unique des actions (utilisé par l'API et le mode démo)
 
@@ -948,6 +994,15 @@ export function applyAction(state, type, payload = {}, now = Date.now()) {
     case "agent.fire": return fireAgent(state, payload, now);
     case "agent.rename": return renameAgent(state, payload, now);
     case "director.brief": return requestBrief(state, now);
+    case "quest.clue": return revealClue(state, payload);
+    case "quest.solve": return solveQuest(state, payload, now);
+    case "eotm.ceremony": return holdCeremony(state, now);
+    case "eotm.next": return nextRound(state, now);
+    case "cat.adopt": return adoptCat(state, payload, now);
+    case "cat.rename": return renameCat(state, payload);
+    case "cat.feed": return feedCat(state, payload, now);
+    case "cat.pet": return petCat(state, payload, now);
+    case "intern.hire": return hireIntern(state, payload, now);
     case "settings.update": {
       if (payload.bossName !== undefined) state.boss.name = clampStr(payload.bossName, 32) || state.boss.name;
       if (payload.companyName !== undefined) state.settings.companyName = clampStr(payload.companyName, 40) || state.settings.companyName;
@@ -1038,6 +1093,9 @@ export function advance(state, now = Date.now()) {
     }
   }
 
+  // Vie sociale : potins, anniversaires, quêtes de l'employé du mois
+  if (advanceLife(state, now)) changed = true;
+
   // Historique borné
   const finished = state.tasks.filter((t) => ["done", "cancelled"].includes(t.status));
   if (finished.length > LIMITS.finishedTasks) {
@@ -1070,6 +1128,7 @@ export function toClientState(state) {
     })),
     tasks: state.tasks.map((t) => (t.output ? { ...t, output: { kind: t.output.kind, title: t.output.title, summary: t.output.summary } } : t)),
     trash: (state.trash || []).map(({ content, ...doc }) => doc),
+    life: lifeForClient(state.life),
   };
 }
 

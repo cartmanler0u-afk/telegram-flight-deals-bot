@@ -2,6 +2,7 @@
 // Ils restent utiles tels quels : structures, checklists et calculs à partir du brief.
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 function numbersIn(text) {
   return [...String(text || "").matchAll(/(\d+(?:[.,]\d+)?)\s*(?:€|eur|euros?)/gi)].map((m) => Number(m[1].replace(",", ".")));
@@ -354,6 +355,277 @@ ${String(task.brief || task.title).split(/[\n.;]+/).map((s) => s.trim()).filter(
 Je montre ça à un manager avant d'aller plus loin. Promis.${feedback(task)}`;
 }
 
+function design(task, agent) {
+  const what = cap(subject(task));
+  const text = norm(`${task.title} ${task.brief}`);
+  const format = /miniature|thumbnail|youtube/.test(text) ? "1280 × 720 px (16:9)"
+    : /story|tiktok|reel|snap/.test(text) ? "1080 × 1920 px (9:16)"
+    : /banniere|banner|header/.test(text) ? "1500 × 500 px"
+    : /logo/.test(text) ? "carré 1000 × 1000 px + version horizontale 1600 × 600 px"
+    : "1080 × 1350 px (4:5, idéal pour les réseaux)";
+  return `# Brief visuel — ${what}
+
+*Par ${agent?.name || "le studio marketing"}*
+
+| Élément | Choix |
+|---|---|
+| Format | ${format} |
+| Style | Moderne, contrasté, lisible sur téléphone |
+| Palette | #111827 (fond) · #FF8A5B (accent) · #F7C948 (highlight) · #FFFFFF (texte) |
+| Typos | Titre : *Bebas Neue* ou *Archivo Black* · Texte : *Inter* |
+
+## Composition
+1. Accroche en 3 à 5 mots, en gros, dans le tiers haut.
+2. Sujet principal au centre (produit, visage ou objet), détouré avec une ombre douce.
+3. Élément de preuve en bas : prix barré, « nouveau », note ⭐, ou logo.
+4. Marge de sécurité de 8 % sur les bords (les interfaces mangent les coins).
+
+## Variantes à produire
+- A : fond sombre + accent orange
+- B : fond clair + accent noir
+- C : version animée (3 s, zoom léger) pour les stories
+
+## Prompt pour un générateur d'images (en anglais)
+> ${what}, clean modern social media visual, bold typography space at the top, vibrant orange accent (#FF8A5B), soft studio lighting, high contrast, minimal background, 4k, no text
+
+## Checklist avant publication
+- [ ] Lisible en vignette (test : réduire l'image à 20 %)
+- [ ] Aucun logo ni visuel protégé sans autorisation
+- [ ] Exports : PNG (qualité) + JPG (léger)${feedback(task)}`;
+}
+
+function ads(task) {
+  const [budget] = numbersIn(`${task.title} ${task.brief}`);
+  const total = budget || 50;
+  const daily = Math.max(5, Math.round(total / 7));
+  return `# Plan de campagne — ${cap(subject(task))}
+
+## Objectif
+Ventes (ou messages) au meilleur coût par acquisition, test sur 7 jours.
+
+## Budget
+- Total : **${total} €** · environ **${daily} €/jour** pendant 7 jours
+- Répartition : 70 % sur la meilleure audience, 30 % en test
+
+## Structure
+| Campagne | Ensemble de publicités | Audience | Budget |
+|---|---|---|---|
+| Conversions | Large (18-34 ans, France) | Intérêts mode / bons plans | ${Math.round(daily * 0.5)} €/j |
+| Conversions | Similaire acheteurs | 1 % des clients | ${Math.round(daily * 0.3)} €/j |
+| Conversions | Retargeting | Visiteurs 30 jours | ${Math.max(1, daily - Math.round(daily * 0.5) - Math.round(daily * 0.3))} €/j |
+
+## 3 accroches à tester
+1. « Tu payes encore plein pot ? »
+2. « Les pépites que personne n'a vues (encore) »
+3. « Ce que j'aurais aimé savoir avant d'acheter »
+
+## Règles de décision
+- CTR < 1 % après 1 000 impressions : changer le visuel
+- CPA > marge par vente : couper l'ensemble de publicités
+- ROAS > 2 pendant 3 jours : augmenter le budget de 20 %
+
+## Suivi quotidien
+Dépense · impressions · CTR · coût par clic · ventes · ROAS (à noter dans le tableau de bord de Rose).${feedback(task)}`;
+}
+
+function dataDoc(task) {
+  const what = cap(subject(task));
+  return `# ${/^tableau/i.test(what) ? what : `Tableau de bord — ${what}`}
+
+## Indicateurs clés
+| Indicateur | Formule | Objectif |
+|---|---|---|
+| Chiffre d'affaires | Σ prix de vente | +10 %/mois |
+| Marge nette | CA − achats − frais − pub | > 35 % du CA |
+| Taux de vente | articles vendus ÷ articles en ligne | > 30 %/mois |
+| Délai moyen de vente | moyenne (date vente − date mise en ligne) | < 10 jours |
+| Coût d'acquisition | dépenses pub ÷ ventes issues de la pub | < marge par vente |
+
+## Modèle Google Sheets
+Colonnes : \`Date | Article | Plateforme | Prix d'achat | Prix de vente | Frais | Pub | Marge\`
+- Marge (H2) : \`=E2-D2-F2-G2\`
+- Taux de marge : \`=SI(E2>0;H2/E2;"")\`
+- Total du mois : \`=SOMME.SI.ENS(H:H;A:A;">="&DATE(2026;10;1))\`
+
+## Lecture
+1. Repérer les 20 % d'articles qui font 80 % de la marge : en racheter.
+2. Tout article en ligne depuis plus de 21 jours : baisser de 10 % ou relancer.
+3. Comparer les plateformes : garder celles où le délai de vente est le plus court.${feedback(task)}`;
+}
+
+function legal(task) {
+  const text = norm(`${task.title} ${task.brief}`);
+  const kind = /cgv|conditions generales/.test(text) ? "cgv" : /mentions/.test(text) ? "mentions" : /contrat/.test(text) ? "contrat" : /rgpd|confidentialite/.test(text) ? "rgpd" : "general";
+  const body = {
+    cgv: `## Article 1 — Objet
+Les présentes conditions générales de vente régissent les ventes réalisées par [Nom / marque] auprès de clients consommateurs.
+
+## Article 2 — Prix
+Les prix sont indiqués en euros, toutes taxes comprises (ou « TVA non applicable, art. 293 B du CGI » en franchise en base).
+
+## Article 3 — Commande et paiement
+La commande est ferme après paiement. Moyens acceptés : [à compléter].
+
+## Article 4 — Livraison
+Expédition sous [X] jours ouvrés. Transporteurs : [à compléter]. Le risque est transféré au client à la livraison.
+
+## Article 5 — Droit de rétractation
+14 jours à compter de la réception (articles L221-18 et suivants du Code de la consommation). Frais de retour : [à la charge du client / offerts].
+
+## Article 6 — Garanties
+Garantie légale de conformité et garantie des vices cachés.
+
+## Article 7 — Médiation et litiges
+Coordonnées du médiateur de la consommation : [à compléter]. Droit applicable : droit français.`,
+    mentions: `## Éditeur du site
+[Nom, prénom ou raison sociale] — [statut, ex. micro-entreprise] — SIRET [à compléter] — adresse [à compléter] — e-mail [à compléter]
+
+## Directeur de la publication
+[Nom]
+
+## Hébergeur
+[Nom de l'hébergeur, adresse, téléphone]
+
+## Propriété intellectuelle
+Les contenus du site sont protégés ; toute reproduction sans autorisation est interdite.
+
+## Données personnelles
+Voir la politique de confidentialité (RGPD).`,
+    contrat: `## Parties
+Entre [Entreprise], ci-après « le Client », et [Prestataire], ci-après « le Prestataire ».
+
+## Article 1 — Mission
+Description précise des prestations, livrables et délais.
+
+## Article 2 — Rémunération
+Montant, modalités de facturation et de paiement (délai légal : 30 jours sauf accord).
+
+## Article 3 — Propriété intellectuelle
+Cession des droits sur les livrables : supports, territoires, durée (une cession doit être écrite et précise).
+
+## Article 4 — Confidentialité
+Engagement réciproque pendant le contrat et [2] ans après.
+
+## Article 5 — Durée et résiliation
+Durée, préavis et motifs de résiliation anticipée.
+
+## Article 6 — Litiges
+Recherche d'une solution amiable, puis tribunal compétent.`,
+    rgpd: `## Données collectées
+Nom, e-mail, adresse de livraison, historique de commandes.
+
+## Finalités et bases légales
+Exécution des commandes (contrat), prospection (consentement), obligations comptables (obligation légale).
+
+## Durées de conservation
+Clients : 3 ans après le dernier achat · Factures : 10 ans.
+
+## Droits des personnes
+Accès, rectification, effacement, opposition, portabilité : contact [e-mail]. Réclamation possible auprès de la CNIL.
+
+## Sous-traitants
+Hébergeur, prestataire de paiement, transporteurs.`,
+    general: `## Situation
+Résumé de la question et des faits connus.
+
+## Ce que dit la règle (en bref)
+- Point 1
+- Point 2
+
+## Ce que je recommande
+1. Action immédiate
+2. Document à préparer
+3. Échéance à noter`,
+  }[kind];
+  return `# ${cap(subject(task))}
+
+${body}
+
+## Points à faire valider par un professionnel
+- Adapter les champs entre crochets à ta situation exacte.
+- Vérifier les règles et seuils en vigueur (service-public.fr, URSSAF, CNIL) : ils évoluent.
+- Ce document est un modèle de travail, pas un avis d'avocat.${feedback(task)}`;
+}
+
+function admin(task) {
+  return `# Démarche — ${cap(subject(task))}
+
+## Étapes
+1. **Rassembler les pièces** : identité, SIRET, relevés de la période, justificatifs.
+2. **Se connecter au bon portail** : autoentrepreneur.urssaf.fr, impots.gouv.fr ou l'espace de l'organisme concerné.
+3. **Remplir et vérifier** : montants, période, coordonnées bancaires.
+4. **Valider et télécharger l'accusé de réception** (à ranger aux archives).
+5. **Programmer le paiement** et noter la prochaine échéance au planning.
+
+## Modèle de mail
+> Bonjour,
+> Je me permets de vous contacter au sujet de [objet]. Vous trouverez ci-joint [documents].
+> Pourriez-vous me confirmer [demande] ?
+> Bien cordialement,
+> [Nom] — [SIRET]
+
+## Échéances à surveiller
+- [ ] Déclaration de chiffre d'affaires (mensuelle ou trimestrielle)
+- [ ] Assurance et banque : renouvellements
+- [ ] Factures fournisseurs à relancer
+
+_Montants et dates exacts : toujours vérifier sur les sites officiels._${feedback(task)}`;
+}
+
+function hrDoc(task, agent) {
+  const role = cap(subject(task).replace(/^(fiche de poste|annonce)\s+(pour\s+)?(un|une)?\s*/i, "")) || "Nouveau poste";
+  return `# ${cap(subject(task))}
+
+*Par ${agent?.name || "les RH"}*
+
+## Le poste : ${role}
+- **Missions** : 3 à 5 missions concrètes, avec des exemples réels de l'entreprise
+- **Profil** : compétences indispensables vs « bonus »
+- **Conditions** : freelance / stage / CDD, rythme, télétravail, rémunération (fourchette affichée = plus de candidatures)
+
+## Annonce prête à publier
+> On recrute ! 🚀 Notre petite équipe cherche un·e ${role.toLowerCase()} pour [mission phare].
+> Tu aimes [compétence clé] et tu veux de l'autonomie ? Écris-nous avec 3 exemples de ton travail.
+
+## Grille d'entretien (sur 5)
+| Critère | Question | Note |
+|---|---|---|
+| Compétence | « Montre-moi ton meilleur projet et ce que tu changerais » | /5 |
+| Autonomie | « Raconte une galère et comment tu l'as réglée » | /5 |
+| Fiabilité | Test pratique court et rémunéré si long | /5 |
+| Esprit d'équipe | « Comment tu réagis à une critique ? » | /5 |
+
+## Intégration (première semaine)
+J1 accès et outils · J2 binôme avec un collègue · J3 première mission simple · J5 point d'étonnement.
+
+_Critères de sélection non discriminatoires, conformes au droit du travail._${feedback(task)}`;
+}
+
+function events(task, agent) {
+  return `# ${cap(subject(task))} 🎈
+
+*Organisé par ${agent?.name || "la team ambiance"}*
+
+## Le plan
+| Heure | Quoi |
+|---|---|
+| 17:30 | Rendez-vous en salle de repos (les chats sont invités) |
+| 17:45 | Jeu brise-glace : « deux vérités, un mensonge » |
+| 18:15 | Apéro + quiz sur l'entreprise |
+| 19:00 | Remise d'un prix totalement inutile (et donc indispensable) |
+
+## Budget
+- Boissons et snacks : 40 €
+- Déco : 10 €
+- Prix : 10 €
+
+## Liste de courses
+Chips, softs, une boisson sans alcool sympa, gobelets, une enceinte, des croquettes premium pour Pixel, Mochi et Croquette.
+
+## Règles d'or
+Inclusif, sans pression, et on ne parle pas boulot après 18 h.${feedback(task)}`;
+}
+
 // Retourne null si le type n'est pas géré ici.
 export function businessTemplate(task, agent) {
   switch (task.type) {
@@ -370,6 +642,13 @@ export function businessTemplate(task, agent) {
     case "automation": return { kind: "code", title: task.title, content: automation(task) };
     case "process": return { kind: "report", title: `Procédure — ${cap(subject(task))}`.slice(0, 140), content: processDoc(task) };
     case "talent": return { kind: "report", title: task.title, content: talent(task) };
+    case "design": return { kind: "visual", title: `Brief visuel — ${cap(subject(task))}`.slice(0, 140), content: design(task, agent) };
+    case "ads": return { kind: "campaign", title: task.title, content: ads(task) };
+    case "data": return { kind: "dashboard", title: task.title, content: dataDoc(task) };
+    case "legal": return { kind: "legal", title: task.title, content: legal(task) };
+    case "admin": return { kind: "legal", title: task.title, content: admin(task) };
+    case "hr": return { kind: "hr", title: task.title, content: hrDoc(task, agent) };
+    case "events": return { kind: "note", title: task.title, content: events(task, agent) };
     case "general": return agent?.role === "intern" ? { kind: "report", title: task.title, content: intern(task, agent) } : null;
     default: return null;
   }

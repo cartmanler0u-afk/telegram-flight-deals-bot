@@ -5,18 +5,15 @@ import { markdown } from "./markdown.js";
 import {
   agentOf, avatar, section, empty, taskCard, taskList, missionForm, docRow, openDocument, agentRow, agentStatusLine,
 } from "./components.js";
-import { DEPARTMENTS, DOC_KINDS, ROLES, roleOf } from "../../shared/roster.js";
+import { DEPARTMENTS, DOC_KINDS, ROLES, TRAIT_LABELS, roleOf } from "../../shared/roster.js";
 import { computeKpis, liveMeeting } from "../../shared/engine.js";
 import { dayKey, dayLabel } from "../../shared/dates.js";
+import { birthdayOf } from "../../shared/social.js";
+import { relationChips } from "./social-panels.js";
 
 const open = (status) => ["queued", "working", "review"].includes(status);
 
-export const TRAIT_LABELS = {
-  prankster: "farceur", foodie: "gourmand", gossip: "commère", party: "fêtard", lazy: "flemmard", nerd: "geek",
-  kind: "bienveillant", hustler: "charbonneur", artist: "artiste", calm: "zen", meticulous: "méticuleux", shy: "timide",
-  boss: "patron", showoff: "m'as-tu-vu", zealous: "zélé", target: "souffre-douleur", traveler: "globe-trotteur",
-  strong: "costaud", nightowl: "oiseau de nuit", hipster: "hipster", grumpy: "grognon", cleaner: "fée du logis",
-};
+export { TRAIT_LABELS };
 
 // ---------------------------------------------------------------------------
 // 👔 Bureau du Directeur
@@ -198,7 +195,7 @@ const studio = {
 // ---------------------------------------------------------------------------
 // 📚 Bibliothèque
 
-const LIB_FILTERS = [["all", "Tout"], ["site", "🌐 Sites"], ["listing", "🏷️ Annonces"], ["video", "🎬 Vidéos"], ["deals", "🔎 Bons plans"], ["finance", "🧮 Finance"], ["code", "🤖 Scripts"], ["report", "📊 Rapports"], ["minutes", "📝 CR"], ["note", "🗒️ Notes"], ["memo", "📌 Décisions"], ["brief", "🧭 Briefs"], ["content", "✍️ Contenus"], ["file", "📄 Fichiers"], ["link", "🔗 Liens"]];
+const LIB_FILTERS = [["all", "Tout"], ["site", "🌐 Sites"], ["listing", "🏷️ Annonces"], ["video", "🎬 Vidéos"], ["deals", "🔎 Bons plans"], ["finance", "🧮 Finance"], ["code", "🤖 Scripts"], ["visual", "🎨 Visuels"], ["campaign", "📈 Pubs"], ["dashboard", "📊 Data"], ["legal", "⚖️ Juridique"], ["hr", "🤝 RH"], ["report", "📋 Rapports"], ["minutes", "📝 CR"], ["note", "🗒️ Notes"], ["memo", "📌 Décisions"], ["brief", "🧭 Briefs"], ["content", "✍️ Contenus"], ["file", "📄 Fichiers"], ["link", "🔗 Liens"]];
 
 const library = {
   room: "library",
@@ -585,7 +582,7 @@ function meetingCard(ctx, m) {
 // ---------------------------------------------------------------------------
 // 🏢 Open space : organigramme, managers, recrutement
 
-const DEPT_ORDER = ["direction", "vente", "sourcing", "social", "tech", "createurs", "organisation"];
+const DEPT_ORDER = ["direction", "vente", "sourcing", "social", "tech", "createurs", "marketing", "juridique", "rh", "organisation"];
 
 const openspace = {
   room: "openspace",
@@ -599,7 +596,7 @@ const openspace = {
     const dept = h("select", { class: "select", hidden: true }, Object.values(DEPARTMENTS).filter((d) => d.id !== "direction").map((d) => h("option", { value: d.id }, `${d.icon} ${d.label}`)));
     const skills = h("p", { class: "small muted", style: { margin: "0 0 10px" } });
     const syncRole = () => {
-      dept.hidden = role.value !== "manager";
+      dept.hidden = !["manager", "intern"].includes(role.value);
       skills.textContent = ROLES[role.value].skills;
     };
     role.addEventListener("change", syncRole);
@@ -631,7 +628,7 @@ const openspace = {
           if (!members.length) return null;
           const managers = members.filter((a) => a.role === "manager" || a.role === "director");
           const others = members.filter((a) => !managers.includes(a));
-          const panel = { direction: "director", vente: "vente", sourcing: "sourcing", social: "social", tech: "studio", createurs: "createurs" }[d];
+          const panel = { direction: "director", vente: "vente", sourcing: "sourcing", social: "social", tech: "studio", createurs: "createurs", marketing: "marketing", juridique: "legal", rh: "rh" }[d];
           return h("div", { class: "section" },
             h("div", { class: "row", style: { marginBottom: "6px" } },
               h("strong", { class: "grow" }, `${DEPARTMENTS[d].icon} ${DEPARTMENTS[d].label}`, h("span", { class: "muted small" }, ` · ${members.length}`)),
@@ -688,7 +685,8 @@ export function agentPanel(agentId) {
               h("p", {}, `${roleOf(a).label}${manager ? ` · rattaché·e à ${manager.name}` : ""}`),
               a.specialty ? h("p", {}, `🎯 Spécialité : ${a.specialty}`) : null,
               (a.traits || []).length ? h("p", {}, `🧬 ${a.traits.map((t) => TRAIT_LABELS[t] || t).join(" · ")}`) : null,
-              h("p", {}, `✅ ${a.stats?.done || 0} mission(s) livrée(s)`)),
+              h("p", {}, `✅ ${a.stats?.done || 0} mission(s) livrée(s) · 🎂 ${birthdayOf(a).label}${a.stats?.eotm ? ` · 🏆 ×${a.stats.eotm}` : ""}`),
+              relationChips(state, a.id)),
             h("button", {
               class: "icon-btn",
               "aria-label": "Renommer",
@@ -705,7 +703,7 @@ export function agentPanel(agentId) {
           clear(queue, taskList(ctx, queued, "Aucune mission en attente."));
           const docs = state.documents.filter((d) => d.authorId === agentId).slice(-6).reverse();
           clear(deliverables, docs.length ? docs.map((d) => docRow(ctx, d)) : empty("Pas encore de livrable."));
-          clear(footer, a.role === "director" ? null : h("button", {
+          clear(footer, a.role === "intern" ? h("button", { class: "btn success block", style: { marginBottom: "8px" }, onClick: () => ctx.openPanel("rh") }, `🎓 Embaucher ${a.name} en CDI (RH)`) : null, a.role === "director" ? null : h("button", {
             class: "btn danger block",
             onClick: async () => {
               if (await confirmDialog(`Se séparer de ${a.name} ? Ses missions seront redistribuées.`)) {

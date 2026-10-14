@@ -126,8 +126,8 @@ Ajoutez ensuite chaque flux avec `/addfeed <url>` directement dans Telegram.
 ## 🏢 QG des agents IA (mini app 3D)
 
 Une mini app Telegram en 3D, façon mini-jeu de gestion avec la DA de la série *The Office* :
-toute ton entreprise (27 employés IA répartis en 7 pôles) travaille sur un plateau de bureaux,
-et chaque pièce est un tableau de bord.
+toute ton entreprise (38 employés IA dont 4 stagiaires, répartis en 10 pôles, et 3 chats)
+travaille sur un plateau de bureaux avec une aile Est, et chaque pièce est un tableau de bord.
 
 ### Les pôles et l'équipe
 
@@ -139,11 +139,16 @@ et chaque pièce est un tableau de bord.
 | 📱 **Social & Contenu** | Manon (manager), Yanis (Snapchat), Sofia (canaux Telegram), Enzo (montage TikTok), Zoé (rédaction) | Commande de **montage TikTok** (hook, découpage, sous-titres, musique), stories Snap, posts Telegram, textes |
 | 🌐 **Studio Web & Tech** | Paul (manager), Léo (architecte web), Max (automatisations & bots) | Sites complets **prévisualisables** et envoyés en `.html` dans Telegram, scripts et bots |
 | 💎 **Créateurs** | Chloé (talent manager) | Préparation du futur pôle OFM : feuille de route de lancement, recrutement, planning de contenu — strictement pro (créatrices majeures et consentantes, règles des plateformes, contrats clairs) |
-| 🗂️ **Organisation** | Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (greffier), Bruno (comptable), Josiane (entretien), Kylian (stagiaire) | Planning en langage naturel avec **rappels Telegram**, **archives** (recherche, filtres, corbeille), **salle de conférence** (notes → compte rendu + décisions + actions), **calculette de marge** et missions compta |
+| 🎨 **Marketing & Création** | Margaux (manager), Nina (graphiste & DA), Malik (growth & pub), Rose (data) | **Briefs visuels** (miniatures, logos, bannières, avec prompt pour générateur d'images), **campagnes pub** Meta/TikTok/Snap (budget, ciblage, accroches, seuils de décision), **tableaux de bord** de ventes et de réseaux |
+| ⚖️ **Juridique & Admin** | Sandrine (juriste), Gilles (assistant administratif) | CGV, mentions légales, RGPD, contrats (freelances, créatrices), démarches URSSAF / impôts / banque — toujours avec les « points à faire valider par un professionnel » ; recherche web avec une clé API |
+| 🤝 **RH & Vie d'équipe** | Gérard (RH, souffre-douleur de Victor), Amandine (Chief Happiness Officer, responsable des chats) | Fiches de poste, recrutement de freelances, intégration ; **relations entre collègues**, **potins officiels**, **stagiaires à embaucher en CDI** |
+| 🗂️ **Organisation** | Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (greffier), Bruno (comptable), Josiane (entretien) | Planning en langage naturel avec **rappels Telegram**, **archives** (recherche, filtres, corbeille), **salle de conférence** (notes → compte rendu + décisions + actions), **calculette de marge** et missions compta |
+| 🧃 **Stagiaires** | Kylian (organisation), Lina (vente), Théo (social), Sacha (tech) | Ils partagent le coin des stagiaires, ont le manager de leur pôle comme tuteur… et peuvent décrocher un CDI |
 
 Le dock en bas de l'écran donne accès à chaque pièce : Direction, Vente, Bons plans, Social,
-Web, Créateurs, Archives, Planning, Réunion, **Cuisine**, **Annexe** et Équipes
-(organigramme, charge de chacun, **recrutement** dans n'importe quel pôle).
+Web, Créateurs, Marketing, Juridique, Archives, Planning, Réunion, **Quêtes**, **RH**,
+**Repos**, **Cuisine**, **Annexe** et Équipes (organigramme, charge de chacun, **recrutement**
+dans n'importe quel pôle, y compris des stagiaires).
 
 **Cycle d'une mission** : tu la confies (bouton **＋ Mission**, une pièce, ou la fiche d'un
 employé) → le directeur (ou le pôle choisi) la route vers la bonne personne → elle la traite
@@ -160,8 +165,53 @@ qui sent le poisson, sieste au bureau, baby-foot, chips coincées dans le distri
 post-its, mots doux sur le tableau blanc de la cuisine. Après une blague, la victime passe
 parfois en **interview face caméra** (style documentaire, un caméraman se promène dans les
 bureaux). Depuis la **Cuisine** tu peux déclencher un pot surprise, un Uber Eats pour l'équipe,
-un exercice incendie, l'élection de l'employé du mois, une réunion improvisée, ou écrire
-toi-même sur le tableau blanc.
+un exercice incendie, une réunion improvisée, ou écrire toi-même sur le tableau blanc ; depuis
+la **Salle de repos** : pause câlins avec les chats, cours de yoga, karaté de Bertrand, tournoi
+de console, tournée de cafés du stagiaire… ou le chili de Bruno.
+
+### Relations, potins et running gags
+
+L'entreprise a une vraie vie sociale, enregistrée avec ton QG (elle continue même quand
+l'app est fermée) :
+
+- **Relations** : amitiés, meilleurs potes, crushs secrets, couples (toujours entre collègues
+  sans lien hiérarchique, jamais avec le patron ni les stagiaires), rivalités et ex. Elles
+  évoluent toutes seules au fil des jours et se voient dans les bureaux (pauses en amoureux,
+  excuses bidon pour passer au bureau de son crush, disputes à la photocopieuse…).
+- **Potins officiels** toutes les quelques heures, **anniversaires** de chaque employé (gâteau
+  en salle de conf'), et un **bandeau d'actualités** façon chaîne d'info en bas de l'écran.
+- **Running gags** : Victor qui harcèle Gérard des RH (et remplit la boîte à suggestions de
+  « Virer Gérard »), le chili de Bruno renversé sur la moquette, le panneau « jours sans
+  incident » toujours à zéro, le karaté de Bertrand à la salle de sport, le stagiaire et sa
+  tournée de cafés (personne n'a la bonne commande), Pixel qui dort sur les claviers…
+- **Les chats** (Pixel, Mochi, Croquette) vivent dans la salle de repos : siestes sur les
+  claviers, la photocopieuse ou le bureau du directeur, poursuite des collègues, mendicité au
+  frigo. Touche un chat pour lui faire un câlin ; depuis la salle de repos tu peux les nourrir,
+  les renommer ou en adopter jusqu'à cinq.
+- Les bulles de dialogue sont limitées et empilées pour rester lisibles, et les notifications
+  identiques sont regroupées.
+
+### Employé du mois : les quêtes
+
+Chaque mois, trois employés sont nominés (Victor s'auto-nomine, refusé par les RH). Chaque
+nominé a deux quêtes, à résoudre depuis le dock **🏆 Quêtes** :
+
+- 🕵️ **Enquête** : un nominé est accusé d'une blague ; lis les alibis, interroge les témoins,
+  et démasque le seul suspect qui ment (une seule accusation possible).
+- 🔎 **Cache-cache** : un objet (ou un chat !) a disparu ; un indice donne la zone, il faut le
+  trouver dans les bureaux en 3D et le toucher.
+- 🤝 **Médiation** : deux collègues sont fâchés ; choisis la réconciliation qui colle au
+  caractère de la personne vexée.
+- ❓ **Quiz du vendredi** : trois questions sur ton entreprise (qui dirige qui, quel pôle,
+  quel métier).
+- 💼 **Mission** : confie de vraies missions au nominé ; la quête se valide quand elles sont
+  livrées.
+
+Chaque quête réussie rapporte des ⭐ au nominé. Dès trois quêtes terminées, lance la
+**cérémonie** : toute l'équipe se réunit devant le totem de l'entrée, confettis, discours,
+trophée sur le bureau du gagnant, badge 🏆 au-dessus de sa tête et entrée au **mur des
+champions** du bureau RH. Au changement de mois, la cérémonie a lieu automatiquement et une
+nouvelle élection démarre (tu peux aussi relancer une édition juste après une cérémonie).
 
 ### Ménage et cache
 
@@ -217,9 +267,9 @@ livrables ne sont jamais supprimés : un document supprimé passe d'abord par la
 Le QG t'envoie dans Telegram : les **rappels** du planning, les **dossiers à valider**, les
 livraisons et les comptes rendus prêts.
 
-Les QG créés avec la première version (7 agents) sont **migrés automatiquement** au premier
-chargement : missions, documents et planning sont conservés, et les 20 nouveaux collègues
-arrivent dans leurs pôles.
+Les QG créés avec une version précédente sont **migrés automatiquement** au premier
+chargement : missions, documents et planning sont conservés, et les nouveaux collègues (aile
+Est, stagiaires, chats) arrivent dans leurs pôles.
 
 ### Tester en local
 
@@ -234,8 +284,9 @@ l'essayer *dans* Telegram avant de déployer, exposez le port en https avec un t
 (`cloudflared tunnel --url http://localhost:3000`, ngrok…) et mettez cette URL dans
 `WEBAPP_URL`.
 
-Tests automatisés (moteur, routage des missions, ménage, bons plans, migration, dates,
-signature Telegram, API, générateur IA et recherche web) : `npm test`.
+Tests automatisés (moteur, routage des missions, ménage, bons plans, migrations, vie sociale,
+quêtes et cérémonie, chats, stagiaires, dates, signature Telegram, API, générateur IA et
+recherche web) : `npm test`.
 
 Sur un téléphone d'entrée de gamme, la 3D baisse d'elle-même sa qualité (ombres, résolution)
 si l'image saccade.
@@ -246,12 +297,13 @@ si l'image saccade.
 webapp/                    Mini app (servie telle quelle, sans étape de build)
   index.html, css/         Interface (HUD, dock des pièces, panneaux, modales)
   js/scene/                3D Three.js : plan de l'étage, mobilier, personnages (rendu
-                           instancié), pathfinding A*, vie de bureau (life.js)
+                           instancié), chats (cats.js), pathfinding A*, vie de bureau (life.js)
   js/ui/                   Tableaux de bord des pièces et des pôles, cuisine, annexe,
                            composants, rendu Markdown sûr
   js/backend.js            API du bot (dans Telegram) ou simulation locale (mode démo)
   shared/                  Moteur métier partagé navigateur/serveur (équipe et pôles, missions,
-                           planning, réunions, archives, ménage, bons plans, modèles de livrables)
+                           planning, réunions, archives, ménage, bons plans, modèles de livrables,
+                           vie sociale et quêtes de l'employé du mois dans social.js)
 src/office/                Serveur Express, authentification Telegram, persistance Supabase,
                            agents IA (prompts + appels Claude + recherche web), notifications,
                            pont avec le bot de vols (bridge.js)

@@ -12,6 +12,7 @@ const kitchen = {
   mount(body, ctx) {
     const world = ctx.world();
     const trigger = (kind, ok) => {
+      if (kind === "quests") return ctx.openPanel("quests");
       if (!world) return toast("La 3D n'est pas disponible sur cet appareil.", "error");
       haptic("medium");
       if (world.triggerLife(kind)) {
@@ -26,7 +27,7 @@ const kitchen = {
         ["🎂", "Pot surprise", "party", "🎂 Tout le monde en salle de conf' !"],
         ["🛵", "Uber Eats pour l'équipe", "teamLunch", "🛵 Commande passée, le livreur arrive"],
         ["🚨", "Exercice incendie", "fireDrill", "🚨 Évacuation !"],
-        ["🏆", "Employé du mois", "dundies", "🏆 Et le gagnant est…"],
+        ["🏆", "Employé du mois", "quests", ""],
         ["📣", "Réunion improvisée", "meeting", "📣 Victor convoque tout le monde"],
         ["🧹", "Tournée de ménage", "clean", "🧹 Josiane passe le balai"],
       ].map(([icon, label, kind, ok]) => h("button", { class: "kpi", style: { cursor: "pointer" }, onClick: () => trigger(kind, ok) }, h("b", {}, icon), h("span", {}, label))));
@@ -54,7 +55,7 @@ const kitchen = {
       }
     });
 
-    const gossip = h("div", { class: "card" });
+    const gossip = h("div");
     const interviews = h("div");
     const sInterviews = section("🎤 Interviews face caméra", interviews);
     const journal = h("div", { class: "card" });
@@ -70,9 +71,9 @@ const kitchen = {
     );
     return {
       update(state) {
-        const items = [...ctx.life.entries].reverse().slice(0, 30);
+        const items = [...ctx.life.entries, ...(state.life?.stories || [])].sort((a, b) => b.at - a.at).slice(0, 30);
         clear(gossip, items.length
-          ? items.map((l) => h("div", { class: "log-item" }, h("span", {}, l.icon), h("div", { class: "grow" }, l.text, h("time", {}, timeAgo(l.at)))))
+          ? h("div", { class: "stack" }, items.map((l) => h("div", { class: "story" }, h("div", { class: "story-icon" }, l.icon), h("div", { class: "grow" }, h("div", { class: "story-text" }, l.text), h("div", { class: "story-meta" }, h("time", {}, timeAgo(l.at, ctx.now())))))))
           : empty("Rien à signaler… pour l'instant. Reste un peu, ça va bouger."));
         const quotes = [...ctx.life.interviews].reverse().slice(0, 8);
         sInterviews.setCount(quotes.length || null);

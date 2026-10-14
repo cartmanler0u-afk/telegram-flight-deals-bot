@@ -105,6 +105,7 @@ function teamReportContext(state, manager) {
 const KIND_BY_TYPE = {
   decision: "memo", notes: "note", content: "content", listing: "listing", video: "video", dealhunt: "deals",
   finance: "finance", automation: "code", social: "content", channel: "content", support: "content",
+  design: "visual", ads: "campaign", data: "dashboard", legal: "legal", admin: "legal", hr: "hr", events: "note",
 };
 
 const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 5 };
@@ -196,6 +197,8 @@ export function createClaudeGenerator({ apiKey, model, effort = "medium", webSea
       if (agent.role === "dealhunter" || agent.role === "sourcer") {
         const recent = (state.deals || []).slice(-15).map((d) => `- ${d.title}`).join("\n");
         parts.push(`Date du jour : ${localIso(now, tz).slice(0, 10)}.${recent ? `\nBons plans déjà repérés (ne pas les répéter) :\n${recent}` : ""}`);
+      } else if (WEB_SEARCH_ROLES.has(agent.role)) {
+        parts.push(`Date du jour : ${localIso(now, tz).slice(0, 10)}.`);
       }
 
       if (task.type === "planning") {

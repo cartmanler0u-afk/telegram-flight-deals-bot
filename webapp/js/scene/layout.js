@@ -1,7 +1,7 @@
 // Plan de l'étage (en mètres). x : ouest → est, z : nord → sud (la caméra regarde vers le nord).
 // Orientation d'un personnage : angle y, 0 = regarde vers +z (sud), π = vers le nord.
 
-export const BOUNDS = { minX: -26, maxX: 26, minZ: -17, maxZ: 17 };
+export const BOUNDS = { minX: -26, maxX: 40, minZ: -17, maxZ: 17 };
 export const WALL_H = 2.7;
 
 const S = 0;
@@ -23,15 +23,21 @@ export const AREAS = {
   reception: { rect: [-8, 9, -2, 17], focus: [-5, 13], visit: [-3.3, 11.4], label: [-5, 9.4] },
   photo: { rect: [2, 9, 9, 17], focus: [5.5, 13], visit: [5, 10.4], label: [5.5, 9.4] },
   warehouse: { rect: [9, 9, 26, 17], focus: [17.5, 13], visit: [16, 10.6], label: [17.5, 9.4] },
-  openspace: { rect: [-26, -9, 26, 9], focus: [0, 0], visit: [0, 2.2], label: null },
+  // Aile Est (v3)
+  marketing: { rect: [26, -17, 33, -9], focus: [29.5, -13], visit: [29.5, -10.4], label: [29.5, -9.6] },
+  legal: { rect: [33, -17, 40, -9], focus: [36.5, -13], visit: [36.5, -10.2], label: [36.5, -9.6] },
+  lounge: { rect: [31, -7, 40, 4], focus: [35.5, -1.5], visit: [33.2, -4.8], label: [35.5, 3.4] },
+  gym: { rect: [26, 9, 33, 17], focus: [29.5, 13], visit: [29, 10.4], label: [29.5, 9.4] },
+  hr: { rect: [33, 9, 40, 17], focus: [36.5, 13], visit: [36, 10.6], label: [36.5, 9.4] },
+  openspace: { rect: [-26, -9, 31, 9], focus: [2, 0], visit: [0, 2.2], label: null },
 };
 
 // Murs : segments avec ouvertures. kind : outer | glass | blinds (stores) | half (muret + vitre).
 export const WALLS = [
-  { from: [-26, -17], to: [26, -17], kind: "outer" },
+  { from: [-26, -17], to: [40, -17], kind: "outer" },
   { from: [-26, -17], to: [-26, 17], kind: "outer" },
-  { from: [26, -17], to: [26, 17], kind: "outer" },
-  { from: [-26, 17], to: [26, 17], kind: "outer", gaps: [[-1.8, 1.8]] },
+  { from: [40, -17], to: [40, 17], kind: "outer" },
+  { from: [-26, 17], to: [40, 17], kind: "outer", gaps: [[-1.8, 1.8]] },
   // Rangée nord
   { from: [-26, -9], to: [-17, -9], kind: "blinds", gaps: [[-20.8, -19.2]] },
   { from: [-17, -9], to: [-6, -9], kind: "glass", gaps: [[-12.8, -11.2]] },
@@ -53,6 +59,18 @@ export const WALLS = [
   { from: [-8, 9], to: [-8, 17], kind: "glass" },
   { from: [2, 9], to: [2, 17], kind: "glass" },
   { from: [9, 9], to: [9, 17], kind: "half" },
+  // Aile Est : marketing et juridique au nord, salle de repos, salle de sport et RH au sud
+  { from: [26, -17], to: [26, -9], kind: "glass" },
+  { from: [26, -9], to: [33, -9], kind: "glass", gaps: [[28.7, 30.3]] },
+  { from: [33, -17], to: [33, -9], kind: "blinds" },
+  { from: [33, -9], to: [40, -9], kind: "blinds", gaps: [[35.7, 37.3]] },
+  { from: [31, -7], to: [40, -7], kind: "half" },
+  { from: [31, -7], to: [31, 4], kind: "half", gaps: [[-5.6, -4.0]] },
+  { from: [31, 4], to: [40, 4], kind: "half", gaps: [[35.2, 36.8]] },
+  { from: [26, 9], to: [26, 17], kind: "solid" },
+  { from: [26, 9], to: [33, 9], kind: "glass", gaps: [[28.2, 29.8]] },
+  { from: [33, 9], to: [33, 17], kind: "glass" },
+  { from: [33, 9], to: [40, 9], kind: "glass", gaps: [[35.2, 36.8]] },
 ];
 
 // Postes de travail des pièces : position de la chaise et orientation de la personne assise.
@@ -72,12 +90,21 @@ export const ROOM_DESKS = {
   annexe: [{ id: "acc1", x: -13.2, z: 13.0, facing: N, w: 1.6 }, { id: "acc2", x: -10.4, z: 13.0, facing: N, w: 1.6 }],
   photo: [{ id: "ph1", x: 3.4, z: 15.2, facing: S, w: 1.4 }],
   warehouse: [{ id: "wh1", x: 10.6, z: 13.6, facing: E, w: 1.6 }],
+  marketing: [
+    { id: "mk1", x: 27.8, z: -13.6, facing: N, w: 2, dual: true },
+    { id: "mk2", x: 31.2, z: -13.6, facing: N, w: 2 },
+    { id: "mk3", x: 27.8, z: -11.0, facing: N, w: 2 },
+    { id: "mk4", x: 31.2, z: -11.0, facing: N, w: 2, dual: true },
+  ],
+  legal: [{ id: "lg1", x: 35.0, z: -13.4, facing: N, w: 1.6 }, { id: "lg2", x: 38.2, z: -13.4, facing: N, w: 1.6 }],
+  hr: [{ id: "hr1", x: 35.0, z: 15.0, facing: N, w: 1.5 }, { id: "hr2", x: 38.4, z: 15.0, facing: N, w: 1.5 }],
 };
 
 // Îlots de 4 bureaux du plateau (style "bullpen").
 export const PODS = [
   { x: -21, z: -4.5 }, { x: -14, z: -4.5 }, { x: -7, z: -4.5 }, { x: 7, z: -4.5 }, { x: 14, z: -4.5 }, { x: 21, z: -4.5 },
   { x: -14, z: 4.5 }, { x: -7, z: 4.5 }, { x: 7, z: 4.5 }, { x: 14, z: 4.5 },
+  { x: 28.5, z: 0.5 }, // coin des stagiaires
 ].map((pod, index) => ({
   ...pod,
   index,
@@ -90,6 +117,8 @@ export const PODS = [
 }));
 
 // Îlots préférés de chaque pôle (le premier porte la pancarte du pôle).
+export const INTERN_POD = 10;
+
 export const DEPT_PODS = {
   direction: [0, 7],
   vente: [1, 2, 6],
@@ -113,9 +142,16 @@ const ROLE_ROOMS = {
   accountant: "annexe",
   photographer: "photo",
   logistics: "warehouse",
+  designer: "marketing",
+  growth: "marketing",
+  data: "marketing",
+  lawyer: "legal",
+  admin: "legal",
+  hr: "hr",
+  happiness: "hr",
 };
 
-const ROOM_PREF_BY_DEPT = { tech: "studio", createurs: "createurs" };
+const ROOM_PREF_BY_DEPT = { tech: "studio", createurs: "createurs", marketing: "marketing" };
 
 export const MEETING_SEATS = [
   { x: -15.2, z: -13, facing: E },
@@ -155,7 +191,29 @@ export const SPOTS = {
   ],
   babyfoot: [{ x: -21.95, z: 4.5, facing: E, standing: true }, { x: -20.05, z: 4.5, facing: W, standing: true }],
   sofa: { x: -21, z: 6.75, facing: N },
+  // Salle de repos (chats), salle de sport, RH
+  lounge: {
+    sofa: [{ x: 34.8, z: -3.85, facing: N }, { x: 35.5, z: -3.85, facing: N }, { x: 36.2, z: -3.85, facing: N }, { x: 38.75, z: -2.0, facing: W }, { x: 38.75, z: -1.0, facing: W }],
+    beanbag: [{ x: 32.7, z: -0.6, facing: E }, { x: 32.9, z: 1.5, facing: E }],
+    tv: { x: 35.5, z: -5.3, facing: N, standing: true },
+    arcade: { x: 33.4, z: -5.7, facing: N, standing: true },
+    bowls: { x: 38.0, z: 2.5, facing: S, standing: true },
+    table: [{ x: 35.0, z: 0.45, facing: S }, { x: 35.0, z: 2.15, facing: N }],
+  },
+  gym: {
+    treadmill: [{ x: 27.6, z: 15.0, facing: N, standing: true, y: 0.2 }, { x: 29.4, z: 15.0, facing: N, standing: true, y: 0.2 }],
+    bag: { x: 32.2, z: 12.0, facing: N, standing: true },
+    yoga: [{ x: 31.4, z: 13.6, facing: W, standing: true }, { x: 31.4, z: 14.6, facing: W, standing: true }, { x: 31.4, z: 15.6, facing: W, standing: true }],
+    dojo: { x: 28.2, z: 11.8, facing: S, standing: true },
+    weights: { x: 26.9, z: 13.6, facing: W, standing: true },
+  },
+  suggestionBox: { x: 34.1, z: 10.6, facing: N, standing: true },
+  hrVisit: { x: 35.0, z: 12.8, facing: S, standing: true },
+  eotm: { x: 3.0, z: 6.1, facing: N, standing: true },
 };
+
+// Totem « Employé du mois » (tourné vers le sud, place dégagée devant pour la cérémonie).
+export const EOTM_TOTEM = { x: 3.0, z: 5.2 };
 
 // Points de rassemblement (exercice incendie) : hall d'entrée puis couloir sud.
 export const GATHER = [];
@@ -166,6 +224,7 @@ for (let x = -4; x <= 4; x += 0.8) GATHER.push({ x, z: 7.6, facing: S, standing:
 export const BINS = PODS.map((pod) => ({ x: pod.x + 1.95, z: pod.z + 0.2 }));
 
 const deskOf = (pods) => pods.flatMap((i) => PODS[i].seats);
+const REGULAR_PODS = PODS.filter((p) => p.index !== INTERN_POD).map((p) => p.index);
 
 export function assignDesks(agents) {
   const used = new Set();
@@ -178,8 +237,10 @@ export function assignDesks(agents) {
     }
     const room = ROLE_ROOMS[agent.role] || (agent.role === "manager" ? ROOM_PREF_BY_DEPT[agent.dept] : null);
     let seat = room ? take(ROOM_DESKS[room]) : null;
+    if (!seat && agent.role === "intern") seat = take(PODS[INTERN_POD].seats);
     if (!seat) seat = take(deskOf(DEPT_PODS[agent.dept] || []));
-    if (!seat) seat = take(PODS.flatMap((p) => p.seats));
+    if (!seat) seat = take(deskOf(REGULAR_PODS));
+    if (!seat) seat = take(PODS[INTERN_POD].seats);
     if (!seat) seat = { id: `stand-${agent.id}`, x: -4 + homes.size * 0.5, z: 7.4, facing: N, standing: true };
     used.add(seat.id);
     homes.set(agent.id, seat);
