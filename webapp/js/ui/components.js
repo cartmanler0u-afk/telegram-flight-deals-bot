@@ -104,12 +104,13 @@ export function taskList(ctx, tasks, emptyText, opts) {
 }
 
 // Formulaire "confier une mission".
-export function missionForm(ctx, { agentId = null, type = null, showAgentSelect = false, placeholder = "Décris la mission…", submitLabel = "Confier la mission", presets = [], onDone } = {}) {
+export function missionForm(ctx, { agentId = null, type = null, dept = null, showAgentSelect = false, placeholder = "Décris la mission…", submitLabel = "Confier la mission", presets = [], onDone } = {}) {
   const title = h("input", { class: "input", placeholder, maxlength: 140 });
   const brief = h("textarea", { class: "textarea", placeholder: "Détails, contexte, contraintes (optionnel)", maxlength: 4000, rows: 3 });
   const priority = h("select", { class: "select" }, Object.entries(PRIORITIES).map(([id, p]) => h("option", { value: id, selected: id === "normale" }, `${p.icon} ${p.label}`)));
+  const pool = ctx.state().agents.filter((a) => !dept || a.dept === dept);
   const agentSelect = showAgentSelect
-    ? h("select", { class: "select" }, h("option", { value: "" }, "🧭 Le directeur choisit"), ctx.state().agents.map((a) => h("option", { value: a.id }, `${ROLES[a.role]?.icon || ""} ${a.name} — ${roleOf(a).label}`)))
+    ? h("select", { class: "select" }, h("option", { value: "" }, dept ? "📋 Le pôle choisit" : "🧭 Le directeur choisit"), pool.map((a) => h("option", { value: a.id }, `${ROLES[a.role]?.icon || ""} ${a.name} — ${roleOf(a).label}`)))
     : null;
   const submit = h("button", { class: "btn primary block", type: "submit" }, submitLabel);
 
@@ -130,6 +131,7 @@ export function missionForm(ctx, { agentId = null, type = null, showAgentSelect 
             priority: priority.value,
             agentId: agentSelect?.value || agentId || undefined,
             type: type || undefined,
+            dept: dept || undefined,
           });
           const task = ctx.state().tasks.find((t) => t.id === result?.id);
           const who = task ? agentOf(ctx.state(), task.agentId)?.name : null;

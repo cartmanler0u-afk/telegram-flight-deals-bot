@@ -1,6 +1,6 @@
 // Gère les QG de tous les utilisateurs : chargement, horloge, sauvegarde, notifications.
 
-import { createInitialState, migrateState } from "../../webapp/shared/engine.js";
+import { addDeals, createInitialState, migrateState } from "../../webapp/shared/engine.js";
 import { OfficeRuntime } from "../../webapp/shared/runtime.js";
 import { createTemplateGenerator } from "../../webapp/shared/templates.js";
 
@@ -72,6 +72,17 @@ export class OfficeService {
       })().finally(() => this.loading.delete(ownerId)));
     }
     return this.loading.get(ownerId);
+  }
+
+  // Bons plans trouvés par le bot de vols : remis au dénicheur spécialisé de chaque QG.
+  broadcastDeals(deals) {
+    const items = deals.map((d) => ({ title: d.title, link: d.link, summary: d.summary, source: d.source, category: "vol" }));
+    for (const office of this.offices.values()) {
+      office.runtime.apply((state, now) => {
+        const hunter = state.agents.find((a) => a.role === "dealhunter" && /vol|voyage/i.test(a.specialty || "")) || state.agents.find((a) => a.role === "dealhunter");
+        return addDeals(state, items, now, hunter?.id);
+      });
+    }
   }
 
   tickAll() {

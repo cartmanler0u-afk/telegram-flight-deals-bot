@@ -39,7 +39,7 @@ button { cursor: pointer; }
   display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px;
   background: rgba(14, 17, 32, 0.82); border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 .tag-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .tag-pill .emo { font-size: 12px; }
@@ -64,6 +64,28 @@ button { cursor: pointer; }
 .room-tag:hover { transform: scale(1.06); }
 .room-tag .count { background: var(--danger); color: #fff; border-radius: 999px; padding: 0 6px; font-size: 11px; }
 
+.room-tag.active { transform: scale(1.12); box-shadow: 0 0 0 4px color-mix(in srgb, var(--room, #fff) 45%, transparent), 0 6px 18px rgba(0,0,0,.35); }
+.dept-tag { font-size: 11px; padding: 4px 10px; background: rgba(250, 246, 236, 0.92); color: #2b2b2b; border-color: var(--room); }
+.label-layer.far .dept-tag { display: none; }
+.label-layer.far .room-tag { font-size: 10.5px; padding: 3px 8px; gap: 4px; }
+
+/* ---------- Interview face caméra (style documentaire) ---------- */
+#interview {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--dock-h) + 84px + var(--safe-bottom)); z-index: 30;
+  display: flex; justify-content: center; pointer-events: none; opacity: 0; transform: translateY(14px);
+  transition: opacity 0.35s, transform 0.35s;
+}
+#interview.show { opacity: 1; transform: none; pointer-events: auto; }
+.interview-card {
+  position: relative; display: flex; gap: 12px; align-items: center; max-width: 560px; width: 100%;
+  padding: 14px 16px; border-radius: 6px; background: rgba(12, 12, 12, 0.88); border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: var(--shadow); font-family: "Special Elite", "Courier New", monospace;
+}
+.interview-rec { position: absolute; top: -10px; right: 12px; background: #d00000; color: #fff; font: 700 11px system-ui, sans-serif; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.08em; }
+.interview-quote { font-size: 15px; line-height: 1.4; color: #fff; }
+.interview-lower { display: inline-flex; gap: 8px; align-items: baseline; margin-top: 8px; padding: 3px 10px; background: #f4f1e8; color: #1b1b1b; font-size: 13px; border-radius: 2px; }
+.interview-lower span { color: #555; font-size: 12px; }
+
 /* ---------- HUD ---------- */
 #hud {
   position: fixed; top: 0; left: 0; right: 0; z-index: 10;
@@ -73,7 +95,7 @@ button { cursor: pointer; }
   background: linear-gradient(180deg, rgba(14, 17, 32, 0.85), rgba(14, 17, 32, 0));
 }
 #hud > * { pointer-events: auto; }
-.hud-title { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+.hud-title { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; max-width: 62vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hud-sub { display: flex; gap: 8px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
 .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--card-strong); border: 1px solid var(--line); }
 .badge.ai { background: rgba(124, 108, 255, 0.2); border-color: rgba(124, 108, 255, 0.5); color: #cdc6ff; }
@@ -81,7 +103,7 @@ button { cursor: pointer; }
 .hud-right { display: flex; gap: 6px; }
 .hud-chip {
   border: 1px solid var(--line); background: rgba(22, 26, 46, 0.85); border-radius: 999px;
-  padding: 6px 10px; font-size: 13px; backdrop-filter: blur(6px);
+  padding: 6px 10px; font-size: 13px;
 }
 .hud-chip.alert { border-color: rgba(239, 93, 108, 0.6); background: rgba(239, 93, 108, 0.2); animation: pulse 2s infinite; }
 

@@ -1,12 +1,16 @@
 // Panneau latéral / bottom sheet : affiche le tableau de bord d'une pièce ou d'un agent.
 
 import { clear, toast, haptic } from "./dom.js";
-import { ROOM_PANELS, agentPanel } from "./rooms.js";
-import { ROOMS } from "../../shared/roster.js";
+import { BASE_PANELS, agentPanel } from "./rooms.js";
+import { DEPT_PANELS } from "./departments.js";
+import { LIFE_PANELS } from "./office-life.js";
+import { PANELS } from "../../shared/roster.js";
+
+const ALL_PANELS = { ...BASE_PANELS, ...DEPT_PANELS, ...LIFE_PANELS };
 import { taskProgress } from "../../shared/engine.js";
 
 export class Panels {
-  constructor({ backend, onOpen, onClose }) {
+  constructor({ backend, life, getWorld, onOpen, onClose }) {
     this.backend = backend;
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -35,8 +39,10 @@ export class Panels {
         }
       },
       openAgent: (id) => this.openAgent(id),
-      openRoom: (id) => this.openRoom(id),
+      openPanel: (id) => this.openPanel(id),
       close: () => this.close(),
+      world: () => getWorld?.() || null,
+      life,
     };
 
     // Barres de progression et minuteurs en direct
@@ -47,11 +53,15 @@ export class Panels {
     return !!this.current;
   }
 
-  openRoom(roomId) {
-    const def = ROOM_PANELS[roomId];
-    if (!def) return;
-    const room = ROOMS[roomId];
-    this.show({ key: `room:${roomId}`, kind: "room", id: roomId, def, title: () => room.name, icon: () => room.icon, color: () => room.color, subtitle: def.subtitle });
+  openPanel(panelId) {
+    const def = ALL_PANELS[panelId];
+    const meta = PANELS[panelId];
+    if (!def || !meta) return;
+    this.show({ key: `panel:${panelId}`, kind: "panel", id: panelId, def, title: () => meta.name, icon: () => meta.icon, color: () => meta.color, subtitle: def.subtitle });
+  }
+
+  refresh() {
+    if (this.current) this.update(this.backend.state);
   }
 
   openAgent(agentId) {

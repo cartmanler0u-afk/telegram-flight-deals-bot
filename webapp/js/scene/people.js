@@ -35,10 +35,21 @@ const BLACK = mat("#1a1a22");
 const WHITE = mat("#f5f5f5");
 const HIT = new THREE.MeshBasicMaterial({ visible: false });
 
+// Géométries partagées entre tous les personnages (indispensable au rendu instancié).
+const geoCache = new Map();
+function cg(key, factory) {
+  if (!geoCache.has(key)) geoCache.set(key, factory());
+  return geoCache.get(key);
+}
+
+// Ombre "blob" partagée : bien moins coûteuse qu'une vraie ombre portée par personnage.
+const BLOB_GEO = new THREE.CircleGeometry(0.42, 20);
+const BLOB_MAT = new THREE.MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.22, depthWrite: false });
+BLOB_MAT.userData.batch = true;
+
 function mesh(geo, material, parent, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geo, material);
   m.position.set(x, y, z);
-  m.castShadow = true;
   parent.add(m);
   return m;
 }
@@ -70,42 +81,71 @@ function buildAccessory(parts, kind, look) {
   const { head, torso, handR, handL } = parts;
   switch (kind) {
     case "tie": {
-      const tie = mesh(new THREE.BoxGeometry(0.07, 0.3, 0.02), mat("#c0392b"), torso, 0, 0.48, 0.19);
+      const tie = mesh(cg(`new THREE.BoxGeometry(0.07, 0.3, 0.02)`, () => new THREE.BoxGeometry(0.07, 0.3, 0.02)), mat("#c0392b"), torso, 0, 0.48, 0.19);
       tie.rotation.x = -0.12;
       break;
     }
     case "headset": {
-      const band = mesh(new THREE.TorusGeometry(0.215, 0.018, 6, 20, Math.PI), BLACK, head, 0, 0.17, 0);
+      const band = mesh(cg(`new THREE.TorusGeometry(0.215, 0.018, 6, 20, Math.PI)`, () => new THREE.TorusGeometry(0.215, 0.018, 6, 20, Math.PI)), BLACK, head, 0, 0.17, 0);
       band.rotation.y = Math.PI / 2;
-      const mic = mesh(new THREE.BoxGeometry(0.02, 0.02, 0.16), BLACK, head, 0.17, 0.08, 0.1);
+      const mic = mesh(cg(`new THREE.BoxGeometry(0.02, 0.02, 0.16)`, () => new THREE.BoxGeometry(0.02, 0.02, 0.16)), BLACK, head, 0.17, 0.08, 0.1);
       mic.rotation.y = 0.5;
       break;
     }
     case "headphones": {
-      const band = mesh(new THREE.TorusGeometry(0.225, 0.025, 6, 20, Math.PI), mat("#ff4d8d"), head, 0, 0.17, 0);
+      const band = mesh(cg(`new THREE.TorusGeometry(0.225, 0.025, 6, 20, Math.PI)`, () => new THREE.TorusGeometry(0.225, 0.025, 6, 20, Math.PI)), mat("#ff4d8d"), head, 0, 0.17, 0);
       band.rotation.y = Math.PI / 2;
-      for (const sx of [-1, 1]) mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 12), mat("#ff4d8d"), head, sx * 0.21, 0.17, 0).rotation.z = Math.PI / 2;
+      for (const sx of [-1, 1]) mesh(cg(`new THREE.CylinderGeometry(0.07, 0.07, 0.06, 12)`, () => new THREE.CylinderGeometry(0.07, 0.07, 0.06, 12)), mat("#ff4d8d"), head, sx * 0.21, 0.17, 0).rotation.z = Math.PI / 2;
       break;
     }
     case "glasses": {
-      for (const sx of [-1, 1]) mesh(new THREE.TorusGeometry(0.045, 0.01, 6, 14), BLACK, head, sx * 0.075, 0.19, 0.19);
+      for (const sx of [-1, 1]) mesh(cg(`new THREE.TorusGeometry(0.045, 0.01, 6, 14)`, () => new THREE.TorusGeometry(0.045, 0.01, 6, 14)), BLACK, head, sx * 0.075, 0.19, 0.19);
       break;
     }
     case "notepad":
-      mesh(new THREE.BoxGeometry(0.14, 0.02, 0.19), mat("#fff6d6"), handR, 0, -0.03, 0.06);
+      mesh(cg(`new THREE.BoxGeometry(0.14, 0.02, 0.19)`, () => new THREE.BoxGeometry(0.14, 0.02, 0.19)), mat("#fff6d6"), handR, 0, -0.03, 0.06);
       break;
     case "clipboard":
-      mesh(new THREE.BoxGeometry(0.17, 0.02, 0.23), mat("#a0703f"), handL, 0, -0.03, 0.08);
+      mesh(cg(`new THREE.BoxGeometry(0.17, 0.02, 0.23)`, () => new THREE.BoxGeometry(0.17, 0.02, 0.23)), mat("#a0703f"), handL, 0, -0.03, 0.08);
       break;
     case "pen":
-      mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), mat("#2d6cdf"), handR, 0, 0, 0.05).rotation.x = Math.PI / 2;
+      mesh(cg(`new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6)`, () => new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6)), mat("#2d6cdf"), handR, 0, 0, 0.05).rotation.x = Math.PI / 2;
       break;
+    case "phone":
+      mesh(cg(`new THREE.BoxGeometry(0.07, 0.13, 0.015)`, () => new THREE.BoxGeometry(0.07, 0.13, 0.015)), BLACK, handR, 0, -0.02, 0.05);
+      break;
+    case "camera-neck":
+      mesh(cg(`new THREE.BoxGeometry(0.14, 0.09, 0.07)`, () => new THREE.BoxGeometry(0.14, 0.09, 0.07)), BLACK, torso, 0, 0.46, 0.21);
+      break;
+    case "cap": {
+      const capMat = mat(look.shirt || "#333");
+      mesh(cg(`new THREE.CylinderGeometry(0.2, 0.21, 0.09, 16)`, () => new THREE.CylinderGeometry(0.2, 0.21, 0.09, 16)), capMat, head, 0, 0.33, 0);
+      const visor = mesh(cg(`new THREE.BoxGeometry(0.2, 0.02, 0.16)`, () => new THREE.BoxGeometry(0.2, 0.02, 0.16)), capMat, head, 0, 0.29, -0.2);
+      visor.rotation.x = 0.1;
+      break;
+    }
+    case "mop": {
+      const stick = mesh(cg(`new THREE.CylinderGeometry(0.015, 0.015, 1.3, 6)`, () => new THREE.CylinderGeometry(0.015, 0.015, 1.3, 6)), mat("#a0703f"), handR, 0, -0.3, 0.05);
+      stick.rotation.x = 0.25;
+      mesh(cg(`new THREE.BoxGeometry(0.3, 0.06, 0.12)`, () => new THREE.BoxGeometry(0.3, 0.06, 0.12)), mat("#e8e8e8"), handR, 0, -0.95, 0.2);
+      break;
+    }
+    case "delivery-bag":
+      mesh(cg(`new THREE.BoxGeometry(0.46, 0.46, 0.3)`, () => new THREE.BoxGeometry(0.46, 0.46, 0.3)), mat("#111111"), torso, 0, 0.4, -0.36);
+      mesh(cg(`new THREE.BoxGeometry(0.3, 0.05, 0.02)`, () => new THREE.BoxGeometry(0.3, 0.05, 0.02)), mat("#06c167"), torso, 0, 0.5, -0.52);
+      break;
+    case "tv-camera": {
+      const cam = mesh(cg(`new THREE.BoxGeometry(0.16, 0.2, 0.45)`, () => new THREE.BoxGeometry(0.16, 0.2, 0.45)), mat("#1b1b1b"), torso, 0.24, 0.78, 0.08);
+      mesh(cg(`new THREE.CylinderGeometry(0.06, 0.07, 0.1, 12)`, () => new THREE.CylinderGeometry(0.06, 0.07, 0.1, 12)), mat("#333333"), torso, 0.24, 0.78, 0.35).rotation.x = Math.PI / 2;
+      mesh(cg(`new THREE.SphereGeometry(0.025, 6, 6)`, () => new THREE.SphereGeometry(0.025, 6, 6)), new THREE.MeshBasicMaterial({ color: "#ff2d2d", toneMapped: false }), torso, 0.24, 0.9, 0.1);
+      break;
+    }
     case "crown": {
       const gold = mat("#f7c948", { metalness: 0.6, roughness: 0.3, emissive: "#6b4b00", emissiveIntensity: 0.3 });
-      mesh(new THREE.CylinderGeometry(0.13, 0.14, 0.07, 14, 1, true), gold, head, 0, 0.42, 0);
+      mesh(cg(`new THREE.CylinderGeometry(0.13, 0.14, 0.07, 14, 1, true)`, () => new THREE.CylinderGeometry(0.13, 0.14, 0.07, 14, 1, true)), gold, head, 0, 0.42, 0);
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        mesh(new THREE.ConeGeometry(0.03, 0.08, 6), gold, head, Math.cos(a) * 0.125, 0.49, Math.sin(a) * 0.125);
+        mesh(cg(`new THREE.ConeGeometry(0.03, 0.08, 6)`, () => new THREE.ConeGeometry(0.03, 0.08, 6)), gold, head, Math.cos(a) * 0.125, 0.49, Math.sin(a) * 0.125);
       }
       break;
     }
@@ -185,6 +225,12 @@ export class Person {
       this.ring = ring;
     }
 
+    const blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT);
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = 0.015;
+    blob.renderOrder = 1;
+    this.root.add(blob);
+
     const hit = new THREE.Mesh(GEO.hitbox, HIT);
     hit.position.y = 1;
     hit.userData.agentId = id;
@@ -215,6 +261,7 @@ export class Person {
     this.activity = "idle";
     this.phase = Math.random() * 10;
     this.speed = 2.3;
+    this.baseSpeed = 2.3;
     this.heading = 0;
     this.onArrive = null;
   }
@@ -320,6 +367,26 @@ export class Person {
         armRx = -1.15 + Math.sin(ph * 17 + 1.7) * 0.07;
         headX = 0.12 + Math.sin(ph * 0.7) * 0.03;
         torsoX = 0.08;
+      } else if (this.activity === "sleep") {
+        armLx = armRx = -1.35;
+        torsoX = 0.55;
+        headX = 0.5;
+        bodyY += Math.sin(ph * 1.2) * 0.01;
+      } else if (this.activity === "phone") {
+        armLx = -0.75;
+        armRx = -2.5;
+        this.armR.shoulder.rotation.z = 0.6;
+        headY = Math.sin(ph * 0.9) * 0.25;
+        headX = Math.sin(ph * 3) * 0.04;
+      } else if (this.activity === "eat") {
+        armLx = -0.9;
+        armRx = -1.6 + Math.max(0, Math.sin(ph * 2.2)) * -0.7;
+        headX = 0.1 + Math.max(0, Math.sin(ph * 2.2)) * 0.1;
+      } else if (this.activity === "dance") {
+        armLx = -1.2 + Math.sin(ph * 8) * 0.6;
+        armRx = -1.2 - Math.sin(ph * 8) * 0.6;
+        headY = Math.sin(ph * 4) * 0.4;
+        torsoX = Math.sin(ph * 8) * 0.1;
       } else if (this.activity === "talk") {
         armLx = -0.9;
         armRx = -0.9 + Math.max(0, Math.sin(ph * 1.3)) * -0.5;
@@ -344,6 +411,54 @@ export class Person {
       } else if (this.activity === "wave") {
         armRx = -2.6;
         this.armR.shoulder.rotation.z = 0.3 + Math.sin(ph * 10) * 0.35;
+      } else if (this.activity === "dance") {
+        const b = Math.sin(ph * 8);
+        bodyY = Math.abs(b) * 0.08;
+        armLx = -2.4 + b * 0.5;
+        armRx = -2.4 - b * 0.5;
+        thighL = Math.max(0, b) * -0.5;
+        thighR = Math.max(0, -b) * -0.5;
+        kneeL = Math.max(0, b) * 0.8;
+        kneeR = Math.max(0, -b) * 0.8;
+        headY = Math.sin(ph * 4) * 0.5;
+      } else if (this.activity === "phone") {
+        armRx = -2.5;
+        this.armR.shoulder.rotation.z = 0.6;
+        armLx = Math.sin(ph * 1.5) * 0.4 - 0.3;
+        headY = Math.sin(ph * 0.8) * 0.3;
+      } else if (this.activity === "write") {
+        armRx = -2.1 + Math.sin(ph * 12) * 0.15;
+        this.armR.shoulder.rotation.z = 0.15 + Math.sin(ph * 6) * 0.2;
+        headX = -0.15;
+      } else if (this.activity === "clean") {
+        const m = Math.sin(ph * 5);
+        armRx = -0.7 + m * 0.35;
+        armLx = -0.6 - m * 0.35;
+        torsoX = 0.15;
+        this.heading += Math.sin(ph * 2.5) * 0.004;
+      } else if (this.activity === "clap") {
+        armLx = armRx = -1.3;
+        this.armL.shoulder.rotation.z = -0.35 + Math.abs(Math.sin(ph * 9)) * 0.3;
+        this.armR.shoulder.rotation.z = 0.35 - Math.abs(Math.sin(ph * 9)) * 0.3;
+      } else if (this.activity === "kick") {
+        const k = Math.max(0, Math.sin(ph * 6));
+        thighR = -k * 0.9;
+        armLx = armRx = -0.4;
+        headX = 0.15;
+      } else if (this.activity === "babyfoot") {
+        armLx = -1.4 + Math.sin(ph * 14) * 0.15;
+        armRx = -1.4 - Math.sin(ph * 14) * 0.15;
+        torsoX = 0.25;
+        headX = 0.2;
+      } else if (this.activity === "shock") {
+        armLx = armRx = -2.8;
+        this.armL.shoulder.rotation.z = -0.6;
+        this.armR.shoulder.rotation.z = 0.6;
+        headX = -0.2;
+      } else if (this.activity === "film") {
+        armRx = -2.3;
+        armLx = -1.0;
+        this.armR.shoulder.rotation.z = 0.2;
       }
     }
 
@@ -354,7 +469,9 @@ export class Person {
     legR.knee.rotation.x = kneeR;
     armL.shoulder.rotation.x = armLx;
     armR.shoulder.rotation.x = armRx;
-    if (this.activity !== "wave" || this.pose !== "stand") armR.shoulder.rotation.z = 0.08;
+    const customZ = ["wave", "phone", "write", "clap", "shock", "film"].includes(this.activity);
+    if (!customZ) armR.shoulder.rotation.z = 0.08;
+    if (!["clap", "shock"].includes(this.activity)) armL.shoulder.rotation.z = -0.08;
     head.rotation.x = headX;
     head.rotation.y = headY;
     torso.rotation.x = torsoX;

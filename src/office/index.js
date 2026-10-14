@@ -8,6 +8,7 @@ import { createClaudeGenerator } from "./claude.js";
 import { createSupabaseRepository } from "./repository.js";
 import { createOfficeApp } from "./server.js";
 import { OfficeService } from "./service.js";
+import { setDealSink } from "./bridge.js";
 
 const NOTIFIED_KINDS = new Set(["reminder", "needs_approval", "meeting_started", "meeting_summary", "task_done"]);
 
@@ -29,7 +30,7 @@ export async function startOffice(bot) {
     ? { enabled: true, model: config.anthropicModel }
     : { enabled: false, model: null };
   const generator = ai.enabled
-    ? createClaudeGenerator({ apiKey: config.anthropicApiKey, model: config.anthropicModel, effort: config.anthropicEffort })
+    ? createClaudeGenerator({ apiKey: config.anthropicApiKey, model: config.anthropicModel, effort: config.anthropicEffort, webSearch: config.anthropicWebSearch })
     : null;
 
   const service = new OfficeService({
@@ -43,6 +44,7 @@ export async function startOffice(bot) {
     },
   });
   await service.start();
+  setDealSink((deals) => service.broadcastDeals(deals));
 
   const app = createOfficeApp({
     service,

@@ -17,6 +17,7 @@ export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
   anthropicEffort: process.env.ANTHROPIC_EFFORT || "medium",
+  anthropicWebSearch: process.env.ANTHROPIC_WEB_SEARCH !== "false",
   officeNotifications: process.env.OFFICE_NOTIFICATIONS !== "false",
 };
 

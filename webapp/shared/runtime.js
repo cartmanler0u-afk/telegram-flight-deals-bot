@@ -40,6 +40,14 @@ export class OfficeRuntime {
     return result;
   }
 
+  // Modification directe de l'état par le serveur (ex. bons plans reçus du bot de vols).
+  apply(fn) {
+    const result = fn(this.state, this.now());
+    this.onChange();
+    this.tick();
+    return result;
+  }
+
   tick() {
     const { notes, changed } = advance(this.state, this.now());
     if (changed) this.onChange();

@@ -2,12 +2,12 @@
 // bibliothèque, recrutements). Fonctions pures qui modifient l'état JSON passé en paramètre.
 // Partagé tel quel entre le serveur Node et le mode démo du navigateur.
 
-import { ROLES, DEFAULT_AGENTS, TASK_TYPES, PRIORITIES, DEPARTMENTS, DOC_KINDS, HIRE_LOOKS, roleOf } from "./roster.js";
+import { ROLES, DEFAULT_AGENTS, TASK_TYPES, PRIORITIES, DEPARTMENTS, DOC_KINDS, HIRE_LOOKS, TRAITS, roleOf } from "./roster.js";
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export const LIMITS = {
-  agents: 24,
+  agents: 40,
   queuedPerAgent: 8,
   activeTasks: 40,
   finishedTasks: 200,
@@ -17,7 +17,12 @@ export const LIMITS = {
   meetings: 60,
   meetingNotes: 300,
   log: 120,
+  deals: 80,
+  trash: 60,
 };
+
+const HOUR = 3600000;
+const HOUSEKEEPING_EVERY = 8 * HOUR;
 
 export class OfficeError extends Error {}
 
@@ -47,18 +52,19 @@ function pick(list, seed) {
 // ---------------------------------------------------------------------------
 // Création / migration de l'état
 
-const WELCOME_MD = `# Bienvenue dans ton QG 🏢
+const WELCOME_MD = `# Bienvenue dans ton entreprise 🏢
 
-Ton équipe d'agents IA est en place. Voici qui fait quoi :
+Toute l'équipe est en place, organisée en pôles :
 
-- **👔 Bureau du Directeur** — Victor reçoit tes missions, les confie au bon agent et te présente les **dossiers importants** à valider. Il rédige aussi le brief de direction.
-- **📋 Managers** — Manon (Pôle Production) et Hugo (Pôle Organisation) encadrent les équipes et font des rapports.
-- **🌐 Studio Web** — Léo construit des sites complets que tu peux prévisualiser et recevoir dans Telegram.
-- **📚 Bibliothèque** — Iris stocke, classe et retrouve tous les documents produits par le QG.
-- **📅 Secrétariat** — Clara gère ton planning et t'envoie des rappels.
-- **🗒️ Salle de réunion** — Noé prend les notes et rédige les comptes rendus avec les actions à mener.
+- **👔 Direction** — Victor (directeur général) répartit tes missions et te présente les **dossiers importants** à valider. Bertrand, son adjoint, veille aux process (et à l'ordre, beaucoup trop).
+- **🛍️ Pôle Vente** — Sabrina (manager), Inès (Vinted), Tom (photos produit), Moussa (expéditions), Lucie (SAV).
+- **🔎 Sourcing & Bons plans** — Karim (manager), Jade (sourcing), Lucas et Emma, les **dénicheurs de bons plans**.
+- **📱 Social & Contenu** — Manon (manager), Yanis (Snapchat), Sofia (Telegram), Enzo (montage TikTok), Zoé (rédaction).
+- **🌐 Web & Tech** — Paul (lead), Léo (sites web), Max (bots & automatisations).
+- **💎 Pôle Créateurs** — Chloé prépare le lancement de l'activité OFM.
+- **🗂️ Organisation** — Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (comptes rendus), Bruno (compta), Josiane (entretien : elle vide la corbeille et nettoie le cache) et Kylian, le stagiaire.
 
-Astuce : touche une pièce ou un agent pour ouvrir son tableau de bord. Les missions **hautes** ou **critiques** passent toujours par ta validation.`;
+Touche une pièce ou un employé pour ouvrir son tableau de bord. Les missions **hautes** ou **critiques** passent toujours par ta validation. Et ne t'étonne pas si l'agrafeuse de Bertrand finit dans la gelée.`;
 
 export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffset = 0 } = {}) {
   const state = {
@@ -66,7 +72,11 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
     createdAt: now,
     seq: 0,
     boss: { name: clampStr(bossName, 32) || "Boss" },
-    settings: { tzOffset: Number(tzOffset) || 0 },
+    settings: {
+      tzOffset: Number(tzOffset) || 0,
+      companyName: `${clampStr(bossName, 24) || "Boss"} Corp`,
+      dealWatch: { enabled: false, everyHours: 12, topics: "", lastRunAt: null },
+    },
     agents: [],
     tasks: [],
     documents: [],
@@ -74,22 +84,16 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
     meetings: [],
     decisions: [],
     log: [],
+    deals: [],
+    trash: [],
+    housekeeping: { lastAt: now, runs: 0, lastReport: null },
     director: { briefStatus: "idle", lastBriefAt: null, lastBriefDocId: null },
   };
 
-  for (const def of DEFAULT_AGENTS) {
-    state.agents.push({
-      ...JSON.parse(JSON.stringify(def)),
-      dept: def.dept ?? ROLES[def.role].dept,
-      builtin: true,
-      hiredAt: now,
-      stats: { done: 0 },
-      managerId: null,
-    });
-  }
+  for (const def of DEFAULT_AGENTS) state.agents.push(builtinAgent(def, now));
   for (const agent of state.agents) agent.managerId = defaultManagerId(state, agent);
 
-  addDocument(state, { title: "Bienvenue au QG", kind: "note", content: WELCOME_MD, tags: ["guide"], authorId: "director", pinned: true }, now);
+  addDocument(state, { title: "Bienvenue dans l'entreprise", kind: "note", content: WELCOME_MD, tags: ["guide"], authorId: "director", pinned: true }, now);
 
   // Premier rendez-vous : un point d'équipe le lendemain à 10h (heure locale)
   const local = new Date(now + state.settings.tzOffset * 60000);
@@ -99,7 +103,7 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
     start,
     durationMin: 30,
     isMeeting: true,
-    attendees: ["director", "mgr-prod", "mgr-orga"],
+    attendees: ["director", "deputy", "mgr-vente", "mgr-sourcing", "mgr-prod", "mgr-tech", "mgr-orga"],
     remindMinutes: 15,
   }, now);
 
@@ -107,22 +111,56 @@ export function createInitialState(now = Date.now(), { bossName = "Boss", tzOffs
   return state;
 }
 
+function builtinAgent(def, now) {
+  return {
+    ...JSON.parse(JSON.stringify(def)),
+    dept: def.dept ?? ROLES[def.role].dept,
+    traits: def.traits ? [...def.traits] : [],
+    builtin: true,
+    hiredAt: now,
+    stats: { done: 0 },
+    managerId: null,
+  };
+}
+
 // Complète un état ancien/incomplet (robustesse face aux évolutions du format).
 export function migrateState(state, now = Date.now()) {
   if (!state || typeof state !== "object" || !Array.isArray(state.agents)) {
     return createInitialState(now);
   }
-  state.version = STATE_VERSION;
+  const from = state.version || 1;
   state.settings ||= { tzOffset: 0 };
   state.boss ||= { name: "Boss" };
-  for (const key of ["tasks", "documents", "events", "meetings", "decisions", "log"]) {
+  for (const key of ["tasks", "documents", "events", "meetings", "decisions", "log", "deals", "trash"]) {
     if (!Array.isArray(state[key])) state[key] = [];
   }
+  state.settings.companyName ||= `${state.boss.name} Corp`;
+  state.settings.dealWatch ||= { enabled: false, everyHours: 12, topics: "", lastRunAt: null };
+  state.housekeeping ||= { lastAt: now, runs: 0, lastReport: null };
   state.director ||= { briefStatus: "idle", lastBriefAt: null, lastBriefDocId: null };
+
+  if (from < 2) {
+    // v2 : l'entreprise s'agrandit (nouveaux pôles et nouveaux collègues).
+    for (const agent of state.agents) {
+      const def = DEFAULT_AGENTS.find((d) => d.id === agent.id);
+      if (agent.dept === "production") agent.dept = agent.role === "manager" ? "social" : ROLES[agent.role]?.dept || "social";
+      if (def?.dept) agent.dept = def.dept;
+      if (!ROLES[agent.role]) agent.role = "analyst";
+      if (!agent.dept) agent.dept = ROLES[agent.role].dept || "direction";
+      agent.traits ||= def?.traits ? [...def.traits] : [];
+    }
+    const existing = new Set(state.agents.map((a) => a.id));
+    const added = DEFAULT_AGENTS.filter((d) => !existing.has(d.id)).map((d) => builtinAgent(d, now));
+    state.agents.push(...added);
+    for (const agent of state.agents) agent.managerId = defaultManagerId(state, agent);
+    if (added.length) log(state, now, "director", `L'entreprise s'agrandit : ${added.length} nouveaux collègues arrivent (${added.map((a) => a.name).join(", ")}) !`, "🏢");
+  }
   for (const agent of state.agents) {
     agent.stats ||= { done: 0 };
+    agent.traits ||= [];
     if (agent.managerId === undefined) agent.managerId = defaultManagerId(state, agent);
   }
+  state.version = STATE_VERSION;
   return state;
 }
 
@@ -209,38 +247,77 @@ export function managerFor(state, dept, excludeId = null) {
 // ---------------------------------------------------------------------------
 // Routage : le directeur choisit le bon agent selon le contenu de la mission
 
+// Chaque mot-clé trouvé rapporte un point au métier concerné ; le meilleur score l'emporte.
 const ROUTES = [
-  { role: "webdev", re: /\b(site|web|landing|page|html|vitrine|portfolio|boutique|e-?commerce|blog|maquette|front|interface)/, why: "c'est un travail de construction web" },
-  { role: "secretary", re: /(planning|agenda|\brdv\b|rendez-vous|calendrier|planifi|programm|rappel|creneau|horaire|reserv)/, why: "ça concerne le planning" },
-  { role: "scribe", re: /(compte[- ]rendu|prise de notes?|\bnotes?\b|resum|synthese|proces-verbal|\bpv\b|transcri|minutes)/, why: "il faut prendre des notes / synthétiser" },
-  { role: "librarian", re: /(rang|class|archiv|stock|inventaire|biblio|document|fichier|retrouv|cherch|\btri|sauvegard|dossier partage)/, why: "ça touche au stockage et aux archives" },
-  { role: "writer", re: /(redig|article|\bpost\b|newsletter|texte|slogan|copywriting|linkedin|instagram|e-?mail|script)/, why: "c'est de la rédaction" },
-  { role: "director", re: /(decision|strateg|budget|priorit|arbitr|recrut|investi|important|urgent|risque|business plan|objectif)/, why: "c'est un dossier stratégique" },
-  { role: "manager", re: /(rapport d'?equipe|charge de travail|\bequipe\b|organisation du pole)/, why: "c'est un sujet d'équipe" },
+  { role: "webdev", re: /\b(site|web|landing|page|html|vitrine|portfolio|e-?commerce|blog|maquette|front|interface|shopify)/g, why: "c'est un travail de construction web" },
+  { role: "automation", re: /(\bbots?\b)/g, weight: 2, why: "c'est de l'automatisation" },
+  { role: "automation", re: /(automati|script|zapier|make\.com|\bapi\b|webhook|scraping|integration|\bcode\b)/g, why: "c'est de l'automatisation" },
+  { role: "vinted", re: /(vinted|annonce|revend|vendre|vente|leboncoin|prix de vente|negoci|depop|ebay)/g, why: "c'est de la vente en ligne" },
+  { role: "photographer", re: /(photo|shooting|packshot|retouch|lumiere|fond blanc)/g, why: "il faut des photos produit" },
+  { role: "logistics", re: /(colis|expedi|envoi|mondial relay|colissimo|emball|livraison|etiquette|transporteur|stock physique)/g, why: "c'est de la logistique" },
+  { role: "support", re: /(\bsav\b|client|litige|reclamation|retour|rembours|avis negatif|acheteur mecontent)/g, why: "c'est du service client" },
+  { role: "dealhunter", re: /(bons? plans?|erreur de prix|code promo|pepite)/g, weight: 2, why: "c'est une chasse aux bons plans" },
+  { role: "dealhunter", re: /(promo|\bdeal|\bvols?\b|billet|reduction|soldes|black friday)/g, why: "c'est une chasse aux bons plans" },
+  { role: "sourcer", re: /(sourc|fournisseur|grossiste|\blots?\b|friperie|destockage|aliexpress|alibaba|1688|marchandise)/g, why: "c'est du sourcing" },
+  { role: "tiktok", re: /(tiktok|montage|video|\breels?\b|shorts?|\bmonte\b|hook|sous-titr)/g, why: "c'est du montage vidéo" },
+  { role: "snap", re: /(snap|snapchat|story|stories|spotlight)/g, why: "c'est pour Snapchat" },
+  { role: "telegram", re: /(telegram|canal|channel|groupe prive|drop)/g, why: "c'est pour les canaux Telegram" },
+  { role: "talent", re: /(\bofm\b|onlyfans|\bmym\b|createur|creatrice|talent|modele|agence de creat)/g, why: "ça concerne le pôle créateurs" },
+  { role: "accountant", re: /(compta|calcul|marge|chiffre d'?affaire|\bca\b|budget|facture|depense|tresorerie|benefice|rentab|urssaf|tva)/g, why: "c'est de la finance" },
+  { role: "cleaner", re: /(menage|nettoi|nettoy|\bcache\b|corbeille|range le bureau)/g, why: "c'est pour l'entretien" },
+  { role: "deputy", re: /(process|procedure|\bsop\b|checklist|reglement|discipline|organisation interne)/g, why: "c'est une question de process" },
+  { role: "secretary", re: /(planning|agenda|\brdv\b|rendez-vous|calendrier|planifi|programm|rappel|creneau|horaire|reserv)/g, why: "ça concerne le planning" },
+  { role: "scribe", re: /(compte[- ]rendu|prise de notes?|\bnotes?\b|resum|synthese|proces-verbal|\bpv\b|transcri|ordre du jour)/g, why: "il faut prendre des notes / synthétiser" },
+  { role: "librarian", re: /(rang|class|archiv|inventaire|biblio|document|fichier|retrouv|\btri|sauvegard)/g, why: "ça touche aux archives" },
+  { role: "writer", re: /(redig|article|\bpost\b|newsletter|texte|slogan|copywriting|linkedin|instagram|e-?mail|description)/g, why: "c'est de la rédaction" },
+  { role: "director", re: /(decision|strateg|arbitr)/g, weight: 2, why: "c'est un dossier stratégique" },
+  { role: "director", re: /(priorit|recrut|investi|important|urgent|risque|business plan|objectif)/g, why: "c'est un dossier stratégique" },
+  { role: "manager", re: /(rapport d'?equipe|charge de travail|\bequipe\b|organisation du pole)/g, why: "c'est un sujet d'équipe" },
 ];
 
-const ROLE_FALLBACK = { writer: "scribe", analyst: "director", manager: "director" };
+const ROLE_FALLBACK = {
+  writer: "scribe", analyst: "director", manager: "director", automation: "webdev", photographer: "vinted",
+  logistics: "vinted", support: "vinted", dealhunter: "sourcer", sourcer: "dealhunter", snap: "writer",
+  telegram: "writer", tiktok: "writer", talent: "director", accountant: "director", deputy: "director",
+  cleaner: "intern", intern: "analyst", vinted: "writer",
+};
 
-function leastLoaded(state, role) {
-  const candidates = state.agents.filter((a) => a.role === role);
+function leastLoaded(state, role, dept = null) {
+  const candidates = state.agents.filter((a) => a.role === role && (!dept || a.dept === dept));
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => agentLoad(state, a.id) - agentLoad(state, b.id));
   return candidates[0];
 }
 
-export function routeTask(state, text) {
+export function routeTask(state, text, { dept = null } = {}) {
   const n = norm(text);
-  for (const route of ROUTES) {
-    if (!route.re.test(n)) continue;
+  const byRole = new Map();
+  ROUTES.forEach((route, index) => {
+    const score = (n.match(route.re) || []).length * (route.weight || 1);
+    if (!score) return;
+    const entry = byRole.get(route.role) || { route, index, score: 0 };
+    entry.score += score;
+    byRole.set(route.role, entry);
+  });
+  const scored = [...byRole.values()].sort((a, b) => b.score - a.score || a.index - b.index);
+  for (const { route } of scored) {
     let role = route.role;
-    let agent = leastLoaded(state, role);
-    while (!agent && ROLE_FALLBACK[role]) {
+    let agent = leastLoaded(state, role, dept);
+    const seen = new Set();
+    while (!agent && ROLE_FALLBACK[role] && !seen.has(role)) {
+      seen.add(role);
       role = ROLE_FALLBACK[role];
-      agent = leastLoaded(state, role);
+      agent = leastLoaded(state, role, dept);
     }
     if (agent) return { agentId: agent.id, reason: route.why };
   }
-  const generalist = leastLoaded(state, "analyst") || leastLoaded(state, "director");
+  if (dept) {
+    // Dans un pôle : le manager prend la mission s'il n'y a pas de spécialiste évident.
+    const manager = state.agents.find((a) => a.role === "manager" && a.dept === dept);
+    const member = manager || state.agents.filter((a) => a.dept === dept).sort((a, b) => agentLoad(state, a.id) - agentLoad(state, b.id))[0];
+    if (member) return { agentId: member.id, reason: `c'est pour le ${DEPARTMENTS[dept]?.label || "pôle"}` };
+  }
+  const generalist = leastLoaded(state, "analyst") || leastLoaded(state, "deputy") || leastLoaded(state, "director");
   return { agentId: generalist?.id || state.agents[0]?.id, reason: "c'est une mission transverse" };
 }
 
@@ -267,7 +344,7 @@ export function createTask(state, payload, now) {
   let reason = null;
   if (payload.agentId && !agent) throw new OfficeError("Cet agent n'existe plus.");
   if (!agent) {
-    const route = routeTask(state, `${title} ${brief}`);
+    const route = routeTask(state, `${title} ${brief}`, { dept: DEPARTMENTS[payload.dept] ? payload.dept : null });
     agent = findAgent(state, route.agentId);
     reason = route.reason;
   }
@@ -295,7 +372,7 @@ export function createTask(state, payload, now) {
     finishedAt: null,
     output: null,
     docId: null,
-    needsApproval: type === "decision" || PRIORITIES[priority].rank >= 2 || payload.needsApproval === true,
+    needsApproval: type !== "cleaning" && (type === "decision" || PRIORITIES[priority].rank >= 2 || payload.needsApproval === true),
     revisions: 0,
     feedback: [],
     source: clampStr(payload.source || "boss", 40),
@@ -334,6 +411,11 @@ export function attachTaskOutput(state, taskId, output, meta = {}) {
 
 function finishTask(state, task, now, notes) {
   const agent = findAgent(state, task.agentId);
+  if (task.type === "cleaning") {
+    const report = performHousekeeping(state, now, { manual: task.source !== "auto", by: task.agentId, exclude: task.id });
+    task.output = { ...task.output, content: housekeepingReport(state, report, agent) };
+    notes.push({ kind: "housekeeping", text: `🧹 ${agent?.name || "L'entretien"} a fait le ménage du QG` });
+  }
   const out = task.output;
   const doc = addDocument(state, {
     title: out.title,
@@ -454,12 +536,143 @@ export function updateDocument(state, { docId, title, tags, pinned }) {
   return doc;
 }
 
+// Un document supprimé part à la corbeille ; l'agent d'entretien la vide lors du ménage.
 export function deleteDocument(state, { docId }, now) {
   const idx = state.documents.findIndex((d) => d.id === docId);
   if (idx === -1) throw new OfficeError("Document introuvable.");
   const [doc] = state.documents.splice(idx, 1);
-  log(state, now, "librarian", `Document « ${doc.title} » retiré de la bibliothèque.`, "🗑️");
+  state.trash.push({ ...doc, deletedAt: now });
+  if (state.trash.length > LIMITS.trash) state.trash.splice(0, state.trash.length - LIMITS.trash);
+  log(state, now, "librarian", `Document « ${doc.title} » mis à la corbeille.`, "🗑️");
   return doc;
+}
+
+export function restoreDocument(state, { docId }, now) {
+  const idx = state.trash.findIndex((d) => d.id === docId);
+  if (idx === -1) throw new OfficeError("Ce document n'est plus dans la corbeille.");
+  const [{ deletedAt, ...doc }] = state.trash.splice(idx, 1);
+  state.documents.push(doc);
+  log(state, now, "librarian", `Document « ${doc.title} » restauré depuis la corbeille.`, "♻️");
+  return doc;
+}
+
+// ---------------------------------------------------------------------------
+// Entretien : le ménage qui garde le QG léger (journal, corbeille, vieilles données).
+
+export function performHousekeeping(state, now, { manual = false, by = null, exclude = null } = {}) {
+  const report = { log: 0, tasks: 0, events: 0, meetings: 0, trash: 0, deals: 0 };
+  if (state.log.length > 50) {
+    report.log = state.log.length - 50;
+    state.log.splice(0, report.log);
+  }
+  const before = state.tasks.length;
+  state.tasks = state.tasks.filter((t) => t.id === exclude || !(t.status === "cancelled" || (t.status === "done" && now - (t.finishedAt || 0) > 14 * 24 * HOUR)));
+  report.tasks = before - state.tasks.length;
+  const evBefore = state.events.length;
+  state.events = state.events.filter((e) => e.start + e.durationMin * 60000 > now - 7 * 24 * HOUR);
+  report.events = evBefore - state.events.length;
+  const mBefore = state.meetings.length;
+  state.meetings = state.meetings.filter((m) => m.status !== "ended" || now - (m.endedAt || 0) < 30 * 24 * HOUR);
+  report.meetings = mBefore - state.meetings.length;
+  const tBefore = state.trash.length;
+  state.trash = manual ? [] : state.trash.filter((d) => now - d.deletedAt < 3 * 24 * HOUR);
+  report.trash = tBefore - state.trash.length;
+  const dBefore = state.deals.length;
+  state.deals = state.deals.filter((d) => !d.dismissed && now - d.foundAt < 21 * 24 * HOUR);
+  report.deals = dBefore - state.deals.length;
+  state.housekeeping = { lastAt: now, runs: (state.housekeeping?.runs || 0) + 1, lastReport: report, by };
+  const total = Object.values(report).reduce((a, b) => a + b, 0);
+  log(state, now, by || "cleaner", total ? `Ménage terminé : ${total} élément(s) nettoyé(s), cache vidé ✨` : "Ménage terminé : tout était déjà propre ✨", "🧹");
+  return report;
+}
+
+function housekeepingReport(state, report, agent) {
+  return `# Rapport de ménage
+
+*Par ${agent?.name || "l'équipe d'entretien"}*
+
+| Zone | Éléments nettoyés |
+|---|---|
+| Journal d'activité (anciennes entrées) | ${report.log} |
+| Missions annulées ou très anciennes | ${report.tasks} |
+| Rendez-vous passés | ${report.events} |
+| Vieilles réunions | ${report.meetings} |
+| Corbeille vidée | ${report.trash} |
+| Bons plans expirés | ${report.deals} |
+
+Le cache des documents est aussi vidé sur ton téléphone : la prochaine ouverture recharge la version fraîche. ✨
+
+_Les livrables de la bibliothèque ne sont jamais supprimés par le ménage._`;
+}
+
+export function requestCleaning(state, now, source = "boss") {
+  const open = state.tasks.find((t) => t.type === "cleaning" && ["queued", "working"].includes(t.status));
+  if (open) return open;
+  const cleaner = leastLoaded(state, "cleaner") || leastLoaded(state, "intern");
+  if (!cleaner) throw new OfficeError("Personne pour faire le ménage : recrute un agent d'entretien.");
+  return createTask(state, { title: "Grand ménage du QG", brief: "Vider la corbeille, archiver le vieux journal, nettoyer le cache.", agentId: cleaner.id, type: "cleaning", source }, now);
+}
+
+// ---------------------------------------------------------------------------
+// Bons plans dénichés (bot de vols, veille automatique, missions des dénicheurs)
+
+export function addDeals(state, deals, now, hunterId = null) {
+  const hunter = findAgent(state, hunterId) || state.agents.find((a) => a.role === "dealhunter");
+  const added = [];
+  for (const raw of deals || []) {
+    const title = clampStr(raw?.title, 160);
+    if (!title) continue;
+    const link = clampStr(raw.link, 800);
+    const key = norm(link || title);
+    if (state.deals.some((d) => d.key === key)) continue;
+    const deal = {
+      id: uid(state, "bp"),
+      key,
+      title,
+      link: /^https?:\/\//i.test(link) ? link : null,
+      summary: clampStr(raw.summary, 400),
+      source: clampStr(raw.source, 80),
+      category: clampStr(raw.category || "bon plan", 40),
+      hunterId: hunter?.id || null,
+      foundAt: now,
+      dismissed: false,
+    };
+    state.deals.push(deal);
+    added.push(deal);
+  }
+  if (state.deals.length > LIMITS.deals) state.deals.splice(0, state.deals.length - LIMITS.deals);
+  if (added.length) {
+    log(state, now, hunter?.id || "director", added.length === 1 ? `${hunter?.name || "Un dénicheur"} a déniché : ${added[0].title}` : `${hunter?.name || "Les dénicheurs"} a déniché ${added.length} bons plans.`, "🔎");
+  }
+  return added;
+}
+
+export function dismissDeal(state, { dealId }) {
+  const deal = state.deals.find((d) => d.id === dealId);
+  if (!deal) throw new OfficeError("Bon plan introuvable.");
+  deal.dismissed = true;
+  return deal;
+}
+
+export function dealToTask(state, { dealId, agentId }, now) {
+  const deal = state.deals.find((d) => d.id === dealId);
+  if (!deal) throw new OfficeError("Bon plan introuvable.");
+  return createTask(state, {
+    title: `Analyser le bon plan : ${deal.title}`.slice(0, 140),
+    brief: `${deal.summary || ""}\n${deal.link ? `Lien : ${deal.link}` : ""}\nSource : ${deal.source || "inconnue"}\n\nEst-ce intéressant pour nous (revente, usage, partage dans nos canaux) ? Donne un avis chiffré.`,
+    agentId: agentId || undefined,
+    dept: agentId ? undefined : "sourcing",
+    source: "bon plan",
+  }, now);
+}
+
+export function updateDealWatch(state, { enabled, everyHours, topics }) {
+  const watch = state.settings.dealWatch;
+  if (enabled !== undefined) watch.enabled = !!enabled;
+  if (everyHours !== undefined) watch.everyHours = Math.max(3, Math.min(168, Math.round(Number(everyHours) || 12)));
+  if (topics !== undefined) watch.topics = clampStr(topics, 600);
+  if (watch.enabled && !watch.topics) throw new OfficeError("Indique au moins un sujet à surveiller.");
+  return watch;
 }
 
 // ---------------------------------------------------------------------------
@@ -618,7 +831,8 @@ export function hireAgent(state, { name, role, dept }, now) {
     id: uid(state, "ag"),
     name: clampStr(name, 24) || pick(FIRST_NAMES, seed),
     role,
-    dept: role === "manager" ? (DEPARTMENTS[dept] ? dept : "production") : def.dept,
+    dept: role === "manager" ? (DEPARTMENTS[dept] ? dept : "vente") : def.dept,
+    traits: [pick(TRAITS, seed >> 2), pick(TRAITS, seed >> 11)].filter((t, i, arr) => arr.indexOf(t) === i),
     look: {
       skin: pick(HIRE_LOOKS.skin, seed),
       hair: pick(HIRE_LOOKS.hair, seed >> 3),
@@ -638,11 +852,14 @@ export function hireAgent(state, { name, role, dept }, now) {
   return agent;
 }
 
+// Rôles indispensables (ils ont une pièce et des fonctions dédiées) : jamais sans titulaire.
+const PROTECTED_ROLES = new Set(["webdev", "librarian", "secretary", "scribe", "cleaner", "accountant", "dealhunter", "vinted", "tiktok"]);
+
 export function fireAgent(state, { agentId }, now) {
   const agent = findAgent(state, agentId);
   if (!agent) throw new OfficeError("Agent introuvable.");
   if (agent.role === "director") throw new OfficeError("Le directeur ne peut pas être remercié.");
-  if (state.agents.filter((a) => a.role === agent.role).length === 1 && agent.role !== "writer" && agent.role !== "analyst") {
+  if (PROTECTED_ROLES.has(agent.role) && state.agents.filter((a) => a.role === agent.role).length === 1) {
     throw new OfficeError(`${agent.name} est le seul ${roleOf(agent).label.toLowerCase()} du QG : recrute quelqu'un d'autre avant.`);
   }
   if (liveMeeting(state)?.attendees.includes(agent.id)) throw new OfficeError(`${agent.name} est en réunion.`);
@@ -710,6 +927,17 @@ export function applyAction(state, type, payload = {}, now = Date.now()) {
     case "doc.add": return addDocument(state, { ...payload, authorId: "boss" }, now);
     case "doc.update": return updateDocument(state, payload);
     case "doc.delete": return deleteDocument(state, payload, now);
+    case "doc.restore": return restoreDocument(state, payload, now);
+    case "trash.empty": {
+      const count = state.trash.length;
+      state.trash = [];
+      log(state, now, "cleaner", `Corbeille vidée (${count} document(s)).`, "🧹");
+      return null;
+    }
+    case "office.clean": return requestCleaning(state, now, "boss");
+    case "deal.dismiss": return dismissDeal(state, payload);
+    case "deal.toTask": return dealToTask(state, payload, now);
+    case "dealWatch.update": return updateDealWatch(state, payload);
     case "event.add": return addEvent(state, payload, now);
     case "event.delete": return deleteEvent(state, payload, now);
     case "meeting.start": return startMeeting(state, payload, now);
@@ -722,6 +950,7 @@ export function applyAction(state, type, payload = {}, now = Date.now()) {
     case "director.brief": return requestBrief(state, now);
     case "settings.update": {
       if (payload.bossName !== undefined) state.boss.name = clampStr(payload.bossName, 32) || state.boss.name;
+      if (payload.companyName !== undefined) state.settings.companyName = clampStr(payload.companyName, 40) || state.settings.companyName;
       if (payload.tzOffset !== undefined && Number.isFinite(Number(payload.tzOffset))) {
         state.settings.tzOffset = Math.max(-840, Math.min(840, Math.round(Number(payload.tzOffset))));
       }
@@ -753,6 +982,8 @@ export function advance(state, now = Date.now()) {
     next.status = "working";
     next.startedAt = now;
     next.durationMs = TASK_TYPES[next.type]?.durationMs || 20000;
+    // Le ménage n'a pas besoin d'IA : le rapport est produit par le moteur à la fin.
+    if (next.type === "cleaning") next.output = { kind: "report", title: `Ménage — ${new Date(now).toISOString().slice(0, 10)}`, content: "", events: [] };
     log(state, now, agent.id, `${agent.name} attaque « ${next.title} ».`, TASK_TYPES[next.type]?.icon || "💼");
     changed = true;
   }
@@ -788,6 +1019,25 @@ export function advance(state, now = Date.now()) {
     }
   }
 
+  // Ménage automatique régulier
+  if (now - (state.housekeeping?.lastAt || state.createdAt || now) > HOUSEKEEPING_EVERY && state.agents.some((a) => a.role === "cleaner")) {
+    if (!state.tasks.some((t) => t.type === "cleaning" && ["queued", "working"].includes(t.status))) {
+      requestCleaning(state, now, "auto");
+      changed = true;
+    }
+  }
+
+  // Veille automatique des dénicheurs (activée par le patron)
+  const watch = state.settings.dealWatch;
+  if (watch?.enabled && watch.topics && now - (watch.lastRunAt || 0) > watch.everyHours * HOUR) {
+    const hunter = leastLoaded(state, "dealhunter");
+    if (hunter && !state.tasks.some((t) => t.source === "veille" && ["queued", "working"].includes(t.status))) {
+      watch.lastRunAt = now;
+      createTask(state, { title: "Veille bons plans", brief: `Sujets à surveiller :\n${watch.topics}`, agentId: hunter.id, type: "dealhunt", source: "veille" }, now);
+      changed = true;
+    }
+  }
+
   // Historique borné
   const finished = state.tasks.filter((t) => ["done", "cancelled"].includes(t.status));
   if (finished.length > LIMITS.finishedTasks) {
@@ -819,6 +1069,7 @@ export function toClientState(state) {
       excerpt: doc.kind === "site" ? "" : String(content || "").replace(/[#*_>`-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 160),
     })),
     tasks: state.tasks.map((t) => (t.output ? { ...t, output: { kind: t.output.kind, title: t.output.title, summary: t.output.summary } } : t)),
+    trash: (state.trash || []).map(({ content, ...doc }) => doc),
   };
 }
 

@@ -4,6 +4,7 @@
 import { parseFrenchEvent, formatLocal, localIso } from "./dates.js";
 import { computeKpis, findAgent, norm, reportsOf, currentTask, agentLoad } from "./engine.js";
 import { DOC_KINDS, PRIORITIES, roleOf } from "./roster.js";
+import { businessTemplate } from "./business-templates.js";
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -336,8 +337,11 @@ export function createTemplateGenerator({ latencyMs = 600 } = {}) {
         case "notes":
         case "content":
         case "general":
-        default:
+        default: {
+          const business = businessTemplate(task, agent);
+          if (business) return business;
           return { kind: task.type === "notes" ? "note" : task.type === "content" ? "content" : "report", title: task.title, content: genericDoc(state, task, agent) };
+        }
       }
     },
     async summarizeMeeting({ meeting, state }) {

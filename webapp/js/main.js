@@ -3,12 +3,52 @@
 import { createBackend } from "./backend.js";
 import { Panels } from "./ui/panels.js";
 import { h, tg, toast, haptic, openModal, closeTopModal, hasModal } from "./ui/dom.js";
-import { missionForm, openDocument } from "./ui/components.js";
-import { ROOMS } from "../shared/roster.js";
+import { missionForm, openDocument, avatar } from "./ui/components.js";
+import { PANELS, roleOf } from "../shared/roster.js";
 import { computeKpis, liveMeeting } from "../shared/engine.js";
 
-const DOCK = ["overview", "director", "studio", "library", "reception", "meeting", "openspace", "lounge"];
-const ONBOARDED_KEY = "qg-onboarded-v1";
+const DOCK = ["overview", ...Object.keys(PANELS)];
+const ONBOARDED_KEY = "qg-onboarded-v2";
+
+// Potins et interviews de la session (vie de bureau, non enregistrés).
+function createLifeStore() {
+  const listeners = new Set();
+  const store = {
+    entries: [],
+    interviews: [],
+    push(entry) {
+      store.entries.push(entry);
+      if (store.entries.length > 80) store.entries.shift();
+      listeners.forEach((fn) => fn());
+    },
+    interview(item) {
+      store.interviews.push(item);
+      if (store.interviews.length > 20) store.interviews.shift();
+      listeners.forEach((fn) => fn());
+    },
+    subscribe(fn) {
+      listeners.add(fn);
+    },
+  };
+  return store;
+}
+
+// Carton "interview" façon documentaire, en bas de l'écran.
+function showInterview({ agent, quote }) {
+  const root = document.getElementById("interview");
+  root.replaceChildren(
+    h("div", { class: "interview-card" },
+      h("div", { class: "interview-rec" }, "● REC"),
+      avatar(agent, "lg"),
+      h("div", { class: "grow" },
+        h("div", { class: "interview-quote" }, `« ${quote} »`),
+        h("div", { class: "interview-lower" }, h("strong", {}, agent.name), h("span", {}, roleOf(agent).label))))
+  );
+  root.classList.add("show");
+  clearTimeout(showInterview.timer);
+  showInterview.timer = setTimeout(() => root.classList.remove("show"), 7000);
+  root.onclick = () => root.classList.remove("show");
+}
 
 function setupTelegram() {
   if (!tg) return;
@@ -52,10 +92,13 @@ async function boot() {
 
   // ---- Scène 3D (facultative : l'interface reste utilisable sans WebGL)
   let world = null;
+  const life = createLifeStore();
   const panels = new Panels({
     backend,
+    life,
+    getWorld: () => world,
     onOpen: (panel) => {
-      if (panel.kind === "room") world?.focusRoom(panel.id, true);
+      if (panel.kind === "panel") world?.focusPanel(panel.id, true);
       else world?.focusAgent(panel.id, true);
       renderDock();
       syncBackButton();
@@ -70,10 +113,21 @@ async function boot() {
     const { World } = await import("./scene/world.js");
     world = new World(document.getElementById("stage"), {
       now: () => backend.now(),
-      onSelectRoom: (id) => (id === "openspace" || ROOMS[id] ? panels.openRoom(id) : null),
+      onSelectPanel: (id) => panels.openPanel(id),
       onSelectAgent: (id) => panels.openAgent(id),
+      onLife: (entry) => life.push(entry),
+      onInterview: (item) => {
+        life.interview(item);
+        if (!document.body.classList.contains("sheet-open") || window.innerWidth >= 900) showInterview(item);
+      },
     });
+    try {
+      world.documentary = localStorage.getItem("qg-documentary") !== "0";
+    } catch {
+      // préférence par défaut
+    }
     world.init();
+    if (location.hostname === "localhost") window.__qgWorld = world; // diagnostic en développement local
     if (tg?.onEvent) tg.onEvent("viewportChanged", () => world.resize());
   } catch (err) {
     console.error(err);
@@ -87,8 +141,8 @@ async function boot() {
   const clock = document.getElementById("hud-clock");
   const chipWorking = document.getElementById("chip-working");
   const chipReview = document.getElementById("chip-review");
-  chipWorking.addEventListener("click", () => panels.openRoom("openspace"));
-  chipReview.addEventListener("click", () => panels.openRoom("director"));
+  chipWorking.addEventListener("click", () => panels.openPanel("openspace"));
+  chipReview.addEventListener("click", () => panels.openPanel("director"));
   if (backend.mode === "demo") {
     hudMode.textContent = "Mode démo";
     hudMode.className = "badge demo";
@@ -99,7 +153,10 @@ async function boot() {
     hudMode.textContent = "Connecté";
     hudMode.className = "badge";
   }
-  hudMode.addEventListener("click", () => panels.openRoom("lounge"));
+  hudMode.addEventListener("click", () => panels.openPanel("kitchen"));
+  life.subscribe(() => {
+    if (panels.current?.id === "kitchen") panels.refresh();
+  });
   const tickClock = () => {
     clock.textContent = new Date(backend.now()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   };
@@ -108,14 +165,16 @@ async function boot() {
 
   // ---- Dock
   const dock = document.getElementById("dock");
+  let dockActive = null;
   function renderDock() {
     const state = backend.state;
     const k = computeKpis(state, backend.now());
     const live = liveMeeting(state);
-    const badges = { director: k.review, meeting: live ? "●" : 0 };
+    const deals = (state.deals || []).filter((d) => !d.dismissed && backend.now() - d.foundAt < 86400000).length;
+    const badges = { director: k.review, meeting: live ? "●" : 0, sourcing: deals, annexe: (state.trash || []).length ? "🗑️" : 0 };
     dock.replaceChildren(...DOCK.map((id) => {
-      const room = id === "overview" ? { icon: "🗺️", short: "Vue", color: "#7c6cff" } : ROOMS[id];
-      const active = id === "overview" ? !panels.isOpen : panels.current?.kind === "room" && panels.current.id === id;
+      const room = id === "overview" ? { icon: "🗺️", short: "Vue", color: "#7c6cff" } : PANELS[id];
+      const active = id === "overview" ? !panels.isOpen : panels.current?.kind === "panel" && panels.current.id === id;
       return h("button", {
         class: `dock-btn${active ? " active" : ""}`,
         style: { "--room": room.color },
@@ -125,11 +184,16 @@ async function boot() {
             panels.close();
             world?.overview();
           } else {
-            panels.openRoom(id);
+            panels.openPanel(id);
           }
         },
       }, h("span", { class: "emo" }, room.icon), room.short, badges[id] ? h("span", { class: "count" }, badges[id]) : null);
     }));
+    // Sur mobile le dock défile : on ramène la pièce ouverte dans le champ quand elle change.
+    const activeBtn = dock.querySelector(".dock-btn.active");
+    const activeKey = panels.current?.key || "overview";
+    if (activeBtn && activeKey !== dockActive) activeBtn.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+    dockActive = activeKey;
   }
 
   // ---- Nouvelle mission rapide
@@ -196,11 +260,18 @@ async function boot() {
       toast("🧭 Le brief de direction est prêt", "success");
       openDocument(panels.ctx, state.director.lastBriefDocId);
     }
+    const newDeals = (state.deals || []).filter((d) => !(prev.deals || []).some((p) => p.id === d.id));
+    if (newDeals.length) toast(newDeals.length === 1 ? `🔎 Bon plan déniché : ${newDeals[0].title}` : `🔎 ${newDeals.length} nouveaux bons plans dénichés`, "success", 5000);
+    if (state.housekeeping?.lastAt && state.housekeeping.lastAt !== prev.housekeeping?.lastAt) {
+      // Le ménage vide aussi le cache local des documents.
+      backend.clearCache?.();
+      toast("🧹 Ménage terminé : corbeille vidée, cache nettoyé ✨", "success");
+    }
   }
 
   function updateHud(state) {
     const k = computeKpis(state, backend.now());
-    hudTitle.textContent = `🏢 QG de ${state.boss?.name || "Boss"}`;
+    hudTitle.textContent = `🏢 ${state.settings?.companyName || `QG de ${state.boss?.name || "Boss"}`}`;
     chipWorking.querySelector("b").textContent = k.working;
     chipReview.hidden = !k.review;
     chipReview.querySelector("b").textContent = k.review;
@@ -234,17 +305,18 @@ async function boot() {
   }
   if (!onboarded) {
     const modal = openModal({
-      title: "👋 Bienvenue dans ton QG",
+      title: "👋 Bienvenue dans ton entreprise",
       body: h("div", { class: "md" },
-        h("p", {}, "Ton équipe d'agents IA travaille dans cet open space en 3D :"),
+        h("p", {}, "27 employés IA t'attendent dans les bureaux, organisés en pôles :"),
         h("ul", {},
-          h("li", {}, h("strong", {}, "👔 Direction"), " — confie tes missions, valide les dossiers importants, demande le brief."),
-          h("li", {}, h("strong", {}, "🌐 Studio Web"), " — commande des sites complets, prévisualise-les."),
-          h("li", {}, h("strong", {}, "📚 Bibliothèque"), " — tous les livrables et documents sont stockés ici."),
-          h("li", {}, h("strong", {}, "📅 Secrétariat"), " — planning en langage naturel et rappels."),
-          h("li", {}, h("strong", {}, "🗒️ Réunion"), " — prends des notes, le greffier rédige le compte rendu."),
-          h("li", {}, h("strong", {}, "🏢 Équipes"), " — organigramme, managers et recrutements.")),
-        h("p", { class: "muted" }, "Glisse pour te déplacer, pince pour zoomer, touche une pièce ou un agent pour ouvrir son tableau de bord."),
+          h("li", {}, h("strong", {}, "👔 Direction"), " — confie tes missions, valide les dossiers importants."),
+          h("li", {}, h("strong", {}, "🛍️ Vente"), " — annonces Vinted, photos, expéditions, SAV."),
+          h("li", {}, h("strong", {}, "🔎 Bons plans"), " — sourcing et dénicheurs de bons plans."),
+          h("li", {}, h("strong", {}, "📱 Social"), " — Snapchat, Telegram, montage TikTok, rédaction."),
+          h("li", {}, h("strong", {}, "🌐 Web & Tech"), " — sites, bots et automatisations."),
+          h("li", {}, h("strong", {}, "💎 Créateurs"), " — le pôle OFM en préparation."),
+          h("li", {}, h("strong", {}, "🍕 Cuisine"), " — la vie de bureau : potins, pots, Uber Eats, blagues…")),
+        h("p", { class: "muted" }, "Glisse pour te déplacer, pince pour zoomer, touche une pièce, une pancarte ou un employé pour ouvrir son tableau de bord. Et ne laisse jamais ton agrafeuse sans surveillance."),
         backend.mode === "demo" ? h("p", { class: "muted" }, "🎮 Tu es en mode démo : les données restent dans ce navigateur.") : null),
       footer: [h("button", { class: "btn primary block", onClick: () => modal.close() }, "C'est parti !")],
       onClose: () => {

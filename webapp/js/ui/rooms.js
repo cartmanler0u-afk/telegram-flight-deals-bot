@@ -11,6 +11,13 @@ import { dayKey, dayLabel } from "../../shared/dates.js";
 
 const open = (status) => ["queued", "working", "review"].includes(status);
 
+export const TRAIT_LABELS = {
+  prankster: "farceur", foodie: "gourmand", gossip: "commère", party: "fêtard", lazy: "flemmard", nerd: "geek",
+  kind: "bienveillant", hustler: "charbonneur", artist: "artiste", calm: "zen", meticulous: "méticuleux", shy: "timide",
+  boss: "patron", showoff: "m'as-tu-vu", zealous: "zélé", target: "souffre-douleur", traveler: "globe-trotteur",
+  strong: "costaud", nightowl: "oiseau de nuit", hipster: "hipster", grumpy: "grognon", cleaner: "fée du logis",
+};
+
 // ---------------------------------------------------------------------------
 // 👔 Bureau du Directeur
 
@@ -28,7 +35,10 @@ const director = {
     const decisions = h("div");
     const sReview = section("📁 Dossiers à valider", review);
     const sOngoing = section("⚙️ Missions ouvertes", ongoing);
+    const company = h("div", { class: "card hero section" });
+    const poles = h("div");
     body.append(
+      company,
       section("📊 Indicateurs", kpis),
       sReview,
       section("🧭 Brief de direction", brief),
@@ -38,11 +48,32 @@ const director = {
         presets: ["Crée un site vitrine pour mon activité", "Fais l'inventaire de la bibliothèque", "Planifie un point client jeudi 15h", "Analyse les priorités de la semaine"],
       })),
       sOngoing,
+      section("🏢 Les pôles", poles),
       section("📜 Registre des décisions", decisions)
     );
     return {
       update(state) {
         const k = computeKpis(state, ctx.now());
+        clear(company,
+          h("div", { class: "avatar lg", style: { background: "#e0b354" } }, "🏢"),
+          h("div", { class: "grow" }, h("h3", {}, state.settings?.companyName || "Mon entreprise"), h("p", {}, `${state.agents.length} employés · siège social de ${state.boss?.name || "Boss"}`)),
+          h("button", {
+            class: "icon-btn",
+            "aria-label": "Renommer l'entreprise",
+            onClick: async () => {
+              const companyName = await promptDialog({ title: "Nom de l'entreprise", label: "Nouveau nom", multiline: false, submit: "Renommer", placeholder: state.settings?.companyName || "" });
+              if (companyName) ctx.run("settings.update", { companyName }, "🏢 Entreprise renommée");
+            },
+          }, "✏️"));
+        const panelOf = { vente: "vente", sourcing: "sourcing", social: "social", tech: "studio", createurs: "createurs", organisation: "openspace", direction: "director" };
+        clear(poles, h("div", { class: "kpis", style: { gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" } }, Object.values(DEPARTMENTS).filter((d) => d.id !== "direction").map((d) => {
+          const members = state.agents.filter((a) => a.dept === d.id).map((a) => a.id);
+          const busy = state.tasks.filter((t) => members.includes(t.agentId) && ["queued", "working"].includes(t.status)).length;
+          return h("button", { class: "kpi", style: { cursor: "pointer", textAlign: "left" }, onClick: () => ctx.openPanel(panelOf[d.id]) },
+            h("span", {}, `${d.icon} ${d.label}`),
+            h("b", { style: { fontSize: "18px", marginTop: "4px" } }, `${members.length} pers.`),
+            h("span", {}, busy ? `⚙️ ${busy} mission(s)` : "✨ dispo"));
+        })));
         clear(kpis,
           h("div", { class: "kpi" }, h("b", {}, k.working), h("span", {}, "En cours")),
           h("div", { class: `kpi${k.review ? " hot" : ""}` }, h("b", {}, k.review), h("span", {}, "À valider")),
@@ -85,10 +116,7 @@ const SITE_TYPES = ["Site vitrine", "Landing page", "Portfolio", "Restaurant", "
 
 const studio = {
   room: "studio",
-  subtitle: (state) => {
-    const devs = state.agents.filter((a) => a.role === "webdev").map((a) => a.name).join(", ");
-    return `${devs} construi${devs.includes(",") ? "sent" : "t"} tes sites web`;
-  },
+  subtitle: (state) => `${state.agents.filter((a) => a.dept === "tech").map((a) => a.name).join(", ")} · sites, bots et automatisations`,
   mount(body, ctx) {
     const team = h("div");
     const queue = h("div");
@@ -135,11 +163,23 @@ const studio = {
     h("label", { class: "field" }, h("span", {}, "Description"), desc),
     submit);
 
-    body.append(section("👩‍💻 L'équipe du studio", team), section("＋ Commander un site", h("div", { class: "card" }, form)), sQueue, sGallery);
+    body.append(
+      section("👩‍💻 L'équipe Web & Tech", team),
+      section("＋ Commander un site", h("div", { class: "card" }, form)),
+      sQueue,
+      sGallery,
+      section("🤖 Bots & automatisations", missionForm(ctx, {
+        dept: "tech",
+        type: "automation",
+        showAgentSelect: true,
+        placeholder: "Ex : Un bot Telegram qui poste nos drops à 20h",
+        presets: ["Bot Telegram qui poste les nouveautés", "Script qui récapitule mes ventes chaque soir", "Automatiser les réponses aux questions fréquentes"],
+      }))
+    );
     return {
       update(state) {
-        clear(team, state.agents.filter((a) => a.role === "webdev").map((a) => agentRow(ctx, a)));
-        const tasks = state.tasks.filter((t) => t.type === "site" && open(t.status));
+        clear(team, state.agents.filter((a) => a.dept === "tech").sort((a, b) => (b.role === "manager") - (a.role === "manager")).map((a) => agentRow(ctx, a)));
+        const tasks = state.tasks.filter((t) => (t.type === "site" || t.type === "automation") && open(t.status));
         sQueue.setCount(tasks.length);
         clear(queue, taskList(ctx, tasks, "Aucun chantier en cours."));
         const sites = state.documents.filter((d) => d.kind === "site").reverse();
@@ -158,7 +198,7 @@ const studio = {
 // ---------------------------------------------------------------------------
 // 📚 Bibliothèque
 
-const LIB_FILTERS = [["all", "Tout"], ["site", "🌐 Sites"], ["report", "📊 Rapports"], ["minutes", "📝 CR"], ["note", "🗒️ Notes"], ["memo", "📌 Décisions"], ["brief", "🧭 Briefs"], ["content", "✍️ Contenus"], ["file", "📄 Fichiers"], ["link", "🔗 Liens"]];
+const LIB_FILTERS = [["all", "Tout"], ["site", "🌐 Sites"], ["listing", "🏷️ Annonces"], ["video", "🎬 Vidéos"], ["deals", "🔎 Bons plans"], ["finance", "🧮 Finance"], ["code", "🤖 Scripts"], ["report", "📊 Rapports"], ["minutes", "📝 CR"], ["note", "🗒️ Notes"], ["memo", "📌 Décisions"], ["brief", "🧭 Briefs"], ["content", "✍️ Contenus"], ["file", "📄 Fichiers"], ["link", "🔗 Liens"]];
 
 const library = {
   room: "library",
@@ -545,14 +585,18 @@ function meetingCard(ctx, m) {
 // ---------------------------------------------------------------------------
 // 🏢 Open space : organigramme, managers, recrutement
 
+const DEPT_ORDER = ["direction", "vente", "sourcing", "social", "tech", "createurs", "organisation"];
+
 const openspace = {
   room: "openspace",
-  subtitle: (state) => `${state.agents.length} agents · ${state.agents.filter((a) => a.role === "manager").length} managers`,
+  subtitle: (state) => `${state.agents.length} employés · ${state.agents.filter((a) => a.role === "manager").length} managers · ${Object.keys(DEPARTMENTS).length} pôles`,
   mount(body, ctx) {
     const org = h("div");
     const name = h("input", { class: "input", placeholder: "Prénom (optionnel)", maxlength: 24 });
-    const role = h("select", { class: "select" }, Object.entries(ROLES).filter(([, r]) => r.hireable).map(([id, r]) => h("option", { value: id }, `${r.icon} ${r.label}`)));
-    const dept = h("select", { class: "select", hidden: true }, Object.values(DEPARTMENTS).map((d) => h("option", { value: d.id }, `${d.icon} ${d.label}`)));
+    const role = h("select", { class: "select" }, DEPT_ORDER.map((d) => h("optgroup", { label: `${DEPARTMENTS[d].icon} ${DEPARTMENTS[d].label}` },
+      Object.entries(ROLES).filter(([, r]) => r.hireable && r.dept === d).map(([id, r]) => h("option", { value: id }, `${r.icon} ${r.label}`)))),
+    h("optgroup", { label: "📋 Encadrement" }, h("option", { value: "manager" }, "📋 Manager de pôle")));
+    const dept = h("select", { class: "select", hidden: true }, Object.values(DEPARTMENTS).filter((d) => d.id !== "direction").map((d) => h("option", { value: d.id }, `${d.icon} ${d.label}`)));
     const skills = h("p", { class: "small muted", style: { margin: "0 0 10px" } });
     const syncRole = () => {
       dept.hidden = role.value !== "manager";
@@ -572,12 +616,9 @@ const openspace = {
     skills,
     h("button", { class: "btn primary block", type: "submit" }, "Recruter"));
 
-    body.append(section("🧭 Organigramme", org), section("🤝 Recruter un agent", h("div", { class: "card" }, hire)));
+    body.append(section("🧭 Organigramme", org), section("🤝 Recruter", h("div", { class: "card" }, hire)));
     return {
       update(state) {
-        const dir = state.agents.find((a) => a.role === "director");
-        const managers = state.agents.filter((a) => a.role === "manager");
-        const direct = state.agents.filter((a) => a.managerId === dir?.id && a.role !== "manager");
         const reportBtn = (m) => h("button", {
           class: "btn small",
           onClick: (e) => {
@@ -585,43 +626,19 @@ const openspace = {
             ctx.run("task.create", { title: `Rapport d'équipe — ${DEPARTMENTS[m.dept]?.label || m.name}`, agentId: m.id, type: "report" }, `📋 ${m.name} prépare son rapport`);
           },
         }, "📋 Rapport");
-        clear(org,
-          dir ? agentRow(ctx, dir) : null,
-          h("div", { class: "org-level" },
-            managers.map((m) => h("div", { style: { marginBottom: "10px" } },
-              agentRow(ctx, m, reportBtn(m)),
-              h("div", { class: "small muted", style: { margin: "4px 0 0 4px" } }, `${DEPARTMENTS[m.dept]?.icon || ""} ${DEPARTMENTS[m.dept]?.label || ""}`),
-              h("div", { class: "org-level" }, state.agents.filter((a) => a.managerId === m.id).map((a) => agentRow(ctx, a))))),
-            direct.map((a) => agentRow(ctx, a))));
-      },
-    };
-  },
-};
-
-// ---------------------------------------------------------------------------
-// ☕ Cafétéria : journal d'activité
-
-const lounge = {
-  room: "lounge",
-  subtitle: () => "Le journal du QG — tout ce qui se passe, en direct",
-  mount(body, ctx) {
-    const info = h("div");
-    const feed = h("div", { class: "card" });
-    body.append(info, section("📰 Activité", feed));
-    return {
-      update(state) {
-        clear(info, ctx.backend.mode === "demo"
-          ? h("div", { class: "card section" },
-            h("strong", {}, "🎮 Mode démo"),
-            h("p", { class: "small muted" }, "Le QG tourne dans ce navigateur avec des livrables générés par modèles. Ouvre-le depuis ton bot Telegram (/office) pour retrouver tes vraies données, les rappels Telegram et — si une clé API est configurée — des agents qui travaillent avec l'IA Claude."),
-            h("button", { class: "btn small danger", onClick: async () => { if (await confirmDialog("Remettre la démo à zéro ?")) ctx.backend.reset(); } }, "Réinitialiser la démo"))
-          : h("div", { class: "card section" },
-            h("strong", {}, ctx.backend.ai?.enabled ? `🤖 Agents propulsés par l'IA (${ctx.backend.ai.model})` : "🧩 Agents en mode modèles"),
-            h("p", { class: "small muted", style: { marginBottom: 0 } }, ctx.backend.ai?.enabled
-              ? "Chaque mission est réellement traitée par l'IA selon le rôle de l'agent."
-              : "Ajoute ANTHROPIC_API_KEY dans la configuration du bot pour que les agents travaillent avec l'IA.")));
-        const items = [...state.log].reverse().slice(0, 60);
-        clear(feed, items.length ? items.map((l) => h("div", { class: "log-item" }, h("span", {}, l.icon), h("div", { class: "grow" }, l.text, h("time", {}, timeAgo(l.at, ctx.now()))))) : empty("Rien pour l'instant."));
+        clear(org, DEPT_ORDER.map((d) => {
+          const members = state.agents.filter((a) => a.dept === d);
+          if (!members.length) return null;
+          const managers = members.filter((a) => a.role === "manager" || a.role === "director");
+          const others = members.filter((a) => !managers.includes(a));
+          const panel = { direction: "director", vente: "vente", sourcing: "sourcing", social: "social", tech: "studio", createurs: "createurs" }[d];
+          return h("div", { class: "section" },
+            h("div", { class: "row", style: { marginBottom: "6px" } },
+              h("strong", { class: "grow" }, `${DEPARTMENTS[d].icon} ${DEPARTMENTS[d].label}`, h("span", { class: "muted small" }, ` · ${members.length}`)),
+              panel ? h("button", { class: "btn small ghost", onClick: () => ctx.openPanel(panel) }, "Ouvrir ›") : null),
+            managers.map((m) => agentRow(ctx, m, m.role === "manager" ? reportBtn(m) : null)),
+            others.length ? h("div", { class: managers.length ? "org-level" : "" }, others.map((a) => agentRow(ctx, a))) : null);
+        }));
       },
     };
   },
@@ -669,6 +686,8 @@ export function agentPanel(agentId) {
             h("div", { class: "grow" },
               h("h3", {}, a.name),
               h("p", {}, `${roleOf(a).label}${manager ? ` · rattaché·e à ${manager.name}` : ""}`),
+              a.specialty ? h("p", {}, `🎯 Spécialité : ${a.specialty}`) : null,
+              (a.traits || []).length ? h("p", {}, `🧬 ${a.traits.map((t) => TRAIT_LABELS[t] || t).join(" · ")}`) : null,
               h("p", {}, `✅ ${a.stats?.done || 0} mission(s) livrée(s)`)),
             h("button", {
               class: "icon-btn",
@@ -701,4 +720,4 @@ export function agentPanel(agentId) {
   };
 }
 
-export const ROOM_PANELS = { director, studio, library, reception, meeting, openspace, lounge };
+export const BASE_PANELS = { director, studio, library, reception, meeting, openspace };

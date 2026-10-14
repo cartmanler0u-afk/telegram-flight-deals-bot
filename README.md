@@ -125,40 +125,74 @@ Ajoutez ensuite chaque flux avec `/addfeed <url>` directement dans Telegram.
 
 ## 🏢 QG des agents IA (mini app 3D)
 
-Une mini app Telegram en 3D, façon mini-jeu de gestion : ton équipe d'agents IA travaille
-dans un open space, et chaque pièce est un tableau de bord.
+Une mini app Telegram en 3D, façon mini-jeu de gestion avec la DA de la série *The Office* :
+toute ton entreprise (27 employés IA répartis en 7 pôles) travaille sur un plateau de bureaux,
+et chaque pièce est un tableau de bord.
 
-| Pièce | Agent(s) | Ce que tu y fais |
+### Les pôles et l'équipe
+
+| Pôle | Équipe | Ce que tu y fais |
 |---|---|---|
-| 👔 **Bureau du Directeur** | Victor, directeur général | Confier une mission (il choisit le bon agent), **valider ou faire réviser** les dossiers importants, demander le **brief de direction**, registre des décisions |
-| 📋 **Managers** (open space) | Manon (Pôle Production), Hugo (Pôle Organisation) | Organigramme, charge de chaque agent, rapports d'équipe, **recrutement** de nouveaux agents et managers |
-| 🌐 **Studio Web** | Léo, architecte web | Commander un site (vitrine, landing, portfolio, restaurant…), **prévisualiser** le site livré, le recevoir en fichier `.html` dans Telegram |
-| 📚 **Bibliothèque** | Iris, bibliothécaire | Tout ce qui est produit y est **stocké et classé** : recherche, filtres, étiquettes, épingles, dépôt de notes / liens / fichiers texte, inventaire |
-| 📅 **Secrétariat** | Clara, secrétaire | Planning en **langage naturel** (« réunion client jeudi 15h30 »), agenda sur 14 jours, **rappels envoyés dans Telegram** |
-| 🗒️ **Salle de réunion** | Noé, greffier | Réunion en direct avec prise de notes ; à la clôture, **compte rendu** + décisions + actions transformables en missions en un clic |
-| ☕ **Cafétéria** | — | Journal d'activité du QG en temps réel |
+| 👔 **Direction** | Victor (directeur général), Bertrand (directeur adjoint, process & discipline) | Confier une mission (le directeur choisit le bon pôle), **valider ou faire réviser** les dossiers importants, **brief de direction**, registre des décisions, vue d'ensemble de l'entreprise |
+| 🛍️ **Vente** | Sabrina (manager), Inès (Vinted), Tom (photo produit), Moussa (logistique & expéditions), Lucie (SAV) | **Annonce Vinted express** (titre, description, prix, mots-clés), shootings, préparation des colis, réponses aux acheteurs |
+| 🔎 **Sourcing & Bons plans** | Karim (manager), Jade (sourceuse), Lucas (dénicheur vols & voyages), Emma (dénicheuse promos & pépites à revendre) | **Lancer une chasse**, fil des **bons plans dénichés** (transformables en mission d'analyse), **veille automatique** sur tes sujets |
+| 📱 **Social & Contenu** | Manon (manager), Yanis (Snapchat), Sofia (canaux Telegram), Enzo (montage TikTok), Zoé (rédaction) | Commande de **montage TikTok** (hook, découpage, sous-titres, musique), stories Snap, posts Telegram, textes |
+| 🌐 **Studio Web & Tech** | Paul (manager), Léo (architecte web), Max (automatisations & bots) | Sites complets **prévisualisables** et envoyés en `.html` dans Telegram, scripts et bots |
+| 💎 **Créateurs** | Chloé (talent manager) | Préparation du futur pôle OFM : feuille de route de lancement, recrutement, planning de contenu — strictement pro (créatrices majeures et consentantes, règles des plateformes, contrats clairs) |
+| 🗂️ **Organisation** | Hugo (manager), Clara (accueil & planning), Iris (archives), Noé (greffier), Bruno (comptable), Josiane (entretien), Kylian (stagiaire) | Planning en langage naturel avec **rappels Telegram**, **archives** (recherche, filtres, corbeille), **salle de conférence** (notes → compte rendu + décisions + actions), **calculette de marge** et missions compta |
 
-Dans la 3D, les agents vivent leur journée : ils travaillent à leur poste (écrans allumés,
-barre de progression au-dessus de la tête), le manager vient briefer l'agent quand une
-mission arrive, l'agent va déposer son livrable à la bibliothèque puis présente les dossiers
-importants au directeur, tout le monde rejoint la salle quand une réunion commence, et on
-croise des collègues en pause café. Les écrans muraux affichent l'état réel du QG (KPI du
-directeur, tableau kanban, agenda de l'accueil, minuteur de réunion, chantier du studio).
+Le dock en bas de l'écran donne accès à chaque pièce : Direction, Vente, Bons plans, Social,
+Web, Créateurs, Archives, Planning, Réunion, **Cuisine**, **Annexe** et Équipes
+(organigramme, charge de chacun, **recrutement** dans n'importe quel pôle).
 
-**Cycle d'une mission** : tu la confies (bouton **＋ Mission**, bureau du directeur ou fiche
-d'un agent) → le directeur la route vers l'agent compétent → l'agent la traite (une à la
-fois, par priorité) → le livrable est rangé en bibliothèque. Les missions **hautes** ou
-**critiques** et les dossiers stratégiques reviennent dans le bureau du directeur pour ta
+**Cycle d'une mission** : tu la confies (bouton **＋ Mission**, une pièce, ou la fiche d'un
+employé) → le directeur (ou le pôle choisi) la route vers la bonne personne → elle la traite
+(une à la fois, par priorité) → le livrable est rangé aux archives. Les missions **hautes**
+ou **critiques** et les dossiers stratégiques reviennent dans le bureau du directeur pour ta
 validation (✅ valider ou ↩️ demander une révision avec un commentaire).
+
+### La vie de bureau
+
+Les employés ont leur vie (côté affichage uniquement, ça ne touche pas aux missions) :
+pause café et potins à la fontaine, **commandes Uber Eats** livrées par un coursier, micro-ondes
+qui sent le poisson, sieste au bureau, baby-foot, chips coincées dans le distributeur… et des **blagues** façon
+*The Office* : corbeille vidée sur un bureau, agrafeuse dans la gelée, écran couvert de
+post-its, mots doux sur le tableau blanc de la cuisine. Après une blague, la victime passe
+parfois en **interview face caméra** (style documentaire, un caméraman se promène dans les
+bureaux). Depuis la **Cuisine** tu peux déclencher un pot surprise, un Uber Eats pour l'équipe,
+un exercice incendie, l'élection de l'employé du mois, une réunion improvisée, ou écrire
+toi-même sur le tableau blanc.
+
+### Ménage et cache
+
+Josiane, l'agente d'entretien, fait sa **tournée de ménage automatiquement toutes les 8 h**
+(ou à la demande depuis l'**Annexe**) : elle vide la corbeille, allège le journal, retire les
+vieilles missions annulées, les rendez-vous passés et les bons plans expirés, puis range un
+**rapport de ménage** aux archives. Le cache des documents est aussi vidé dans l'app. Les
+livrables ne sont jamais supprimés : un document supprimé passe d'abord par la corbeille
+(restaurable depuis l'Annexe).
+
+### Bons plans
+
+- Chaque bon plan posté par le bot de vols dans ton canal arrive aussi chez **Lucas**, le
+  dénicheur vols & voyages du QG.
+- Avec une clé API, les dénicheurs et la sourceuse font de **vraies recherches web** et citent
+  leurs sources (désactivable avec `ANTHROPIC_WEB_SEARCH=false`, ou automatiquement si la
+  recherche web n'est pas activée sur ton compte Anthropic).
+- La **veille automatique** (pièce Bons plans) lance une chasse toutes les N heures sur les
+  sujets que tu choisis. Avec l'IA, chaque veille est un appel API avec recherche web : garde
+  une fréquence raisonnable (12 h par défaut) pour maîtriser les coûts.
 
 ### Avec ou sans IA
 
 - **Sans clé API** : tout fonctionne, les agents produisent leurs livrables à partir de
-  modèles intégrés (sites HTML responsives, rapports, notes de décision, comptes rendus…).
+  modèles intégrés (sites HTML responsives, annonces Vinted, plans de montage, calculs de
+  marge, méthodes de veille, rapports, notes de décision, comptes rendus…).
 - **Avec `ANTHROPIC_API_KEY`** : chaque agent travaille réellement avec l'IA Claude, avec un
-  rôle et des consignes propres (le studio web code des pages complètes, la secrétaire
-  transforme tes demandes en rendez-vous structurés, le greffier extrait décisions et
-  actions…). Modèle par défaut : `claude-opus-5-5` (modifiable via `ANTHROPIC_MODEL`, ex.
+  rôle, une personnalité et des consignes propres (le studio web code des pages complètes,
+  Inès rédige des annonces Vinted prêtes à publier, Enzo écrit des plans de montage TikTok,
+  la secrétaire transforme tes demandes en rendez-vous structurés, le greffier extrait
+  décisions et actions, les dénicheurs cherchent sur le web…). Modèle par défaut : `claude-opus-5-5` (modifiable via `ANTHROPIC_MODEL`, ex.
   `claude-sonnet-5-5` ou `claude-haiku-5-5` pour réduire les coûts ; effort réglable via
   `ANTHROPIC_EFFORT`). Si l'IA échoue, l'agent livre quand même grâce aux modèles.
 
@@ -177,10 +211,15 @@ validation (✅ valider ou ↩️ demander une révision avec un commentaire).
    **🏢 QG** à côté du champ de saisie, et `/office` envoie un bouton pour ouvrir la mini app.
    Aucune configuration BotFather n'est nécessaire.
 5. Optionnel : `ANTHROPIC_API_KEY` (clé sur [console.anthropic.com](https://console.anthropic.com/)),
+   `ANTHROPIC_WEB_SEARCH=false` pour couper la recherche web des dénicheurs,
    `OFFICE_NOTIFICATIONS=false` pour couper les notifications du QG.
 
 Le QG t'envoie dans Telegram : les **rappels** du planning, les **dossiers à valider**, les
 livraisons et les comptes rendus prêts.
+
+Les QG créés avec la première version (7 agents) sont **migrés automatiquement** au premier
+chargement : missions, documents et planning sont conservés, et les 20 nouveaux collègues
+arrivent dans leurs pôles.
 
 ### Tester en local
 
@@ -195,20 +234,27 @@ l'essayer *dans* Telegram avant de déployer, exposez le port en https avec un t
 (`cloudflared tunnel --url http://localhost:3000`, ngrok…) et mettez cette URL dans
 `WEBAPP_URL`.
 
-Tests automatisés (moteur, dates, signature Telegram, API, générateur IA) : `npm test`.
+Tests automatisés (moteur, routage des missions, ménage, bons plans, migration, dates,
+signature Telegram, API, générateur IA et recherche web) : `npm test`.
+
+Sur un téléphone d'entrée de gamme, la 3D baisse d'elle-même sa qualité (ombres, résolution)
+si l'image saccade.
 
 ### Architecture
 
 ```
 webapp/                    Mini app (servie telle quelle, sans étape de build)
   index.html, css/         Interface (HUD, dock des pièces, panneaux, modales)
-  js/scene/                3D Three.js : plan de l'étage, mobilier, personnages, pathfinding A*
-  js/ui/                   Tableaux de bord de chaque pièce, composants, rendu Markdown sûr
+  js/scene/                3D Three.js : plan de l'étage, mobilier, personnages (rendu
+                           instancié), pathfinding A*, vie de bureau (life.js)
+  js/ui/                   Tableaux de bord des pièces et des pôles, cuisine, annexe,
+                           composants, rendu Markdown sûr
   js/backend.js            API du bot (dans Telegram) ou simulation locale (mode démo)
-  shared/                  Moteur métier partagé navigateur/serveur (missions, planning,
-                           réunions, bibliothèque, recrutements, modèles de livrables)
+  shared/                  Moteur métier partagé navigateur/serveur (équipe et pôles, missions,
+                           planning, réunions, archives, ménage, bons plans, modèles de livrables)
 src/office/                Serveur Express, authentification Telegram, persistance Supabase,
-                           agents IA (prompts + appels Claude), notifications
+                           agents IA (prompts + appels Claude + recherche web), notifications,
+                           pont avec le bot de vols (bridge.js)
 src/commands/office.js     Commandes /office et /qg
 ```
 

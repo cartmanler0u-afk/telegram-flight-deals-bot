@@ -4,6 +4,7 @@ import { searchKiwiDeals } from "./sources/kiwi.js";
 import { getChannelId, listFeeds, listRoutes, isDealSeen, markDealSeen } from "./store.js";
 import { postDeal } from "./poster.js";
 import { config } from "./config.js";
+import { shareDeals } from "./office/bridge.js";
 
 export async function runDropCycle(bot) {
   const chatId = (await getChannelId()) || config.defaultChannelId;
@@ -31,16 +32,19 @@ export async function runDropCycle(bot) {
     }
   }
 
+  const posted = [];
   for (const deal of deals) {
     if (!deal.id) continue;
     if (await isDealSeen(deal.id)) continue;
     try {
       await postDeal(bot, chatId, deal);
       await markDealSeen(deal.id);
+      posted.push(deal);
     } catch (err) {
       console.error(`Erreur envoi Telegram pour le deal ${deal.id} :`, err.message);
     }
   }
+  shareDeals(posted);
 }
 
 export function startScheduler(bot) {

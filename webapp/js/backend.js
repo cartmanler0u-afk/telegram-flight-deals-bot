@@ -130,6 +130,10 @@ class RemoteBackend extends Emitter {
     await this.request("POST", `/api/documents/${encodeURIComponent(id)}/send`);
     return "telegram";
   }
+
+  clearCache() {
+    this.docCache.clear();
+  }
 }
 
 // ----------------------------------------------------------------------------
