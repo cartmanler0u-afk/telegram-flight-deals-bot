@@ -30,3 +30,10 @@ create table if not exists seen_deals (
   id text primary key,
   seen_at timestamptz not null default now()
 );
+
+-- QG des agents IA (mini app /office) : un état JSON par utilisateur Telegram.
+create table if not exists office_state (
+  owner_id text primary key,
+  state jsonb not null,
+  updated_at timestamptz not null default now()
+);

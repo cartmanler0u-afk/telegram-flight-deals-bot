@@ -12,6 +12,9 @@ export function registerHelp(bot) {
         "/removeroute <id> — retirer une route surveillée (admin)",
         "/listroutes — lister les routes surveillées",
         "/testdrop — forcer un cycle de recherche immédiat (admin)",
+        "",
+        "🏢 *QG des agents IA*",
+        "/office — ouvrir la mini app 3D de vos agents (directeur, managers, studio web, bibliothèque, secrétariat, salle de réunion)",
       ].join("\n"),
       { parse_mode: "Markdown" }
     );

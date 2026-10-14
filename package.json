@@ -1,14 +1,16 @@
 {
   "name": "telegram-flight-deals-bot",
   "version": "1.0.0",
-  "description": "Bot Telegram qui poste automatiquement des bons plans billets d'avion (flux RSS + recherche de vols optionnelle via l'API Kiwi Tequila)",
+  "description": "Bot Telegram de bons plans billets d'avion + QG 3D d'agents IA (mini app Telegram)",
   "main": "src/index.js",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "office:dev": "node scripts/office-dev.js",
+    "test": "node --test test/office.test.js"
   },
   "keywords": [
     "telegram",
@@ -18,10 +20,13 @@
   ],
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@supabase/supabase-js": "^2.112.4",
     "dotenv": "^17.4.2",
+    "express": "^5.3.0",
     "node-cron": "^3.0.3",
     "rss-parser": "^3.13.0",
-    "telegraf": "^4.16.3"
+    "telegraf": "^4.16.3",
+    "three": "0.170.0"
   }
 }

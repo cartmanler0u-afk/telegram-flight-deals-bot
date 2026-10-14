@@ -7,6 +7,7 @@ import { registerAddRoute } from "./addroute.js";
 import { registerRemoveRoute } from "./removeroute.js";
 import { registerListRoutes } from "./listroutes.js";
 import { registerTestDrop } from "./testdrop.js";
+import { registerOffice } from "./office.js";
 
 export function registerCommands(bot) {
   registerHelp(bot);
@@ -18,4 +19,5 @@ export function registerCommands(bot) {
   registerRemoveRoute(bot);
   registerListRoutes(bot);
   registerTestDrop(bot);
+  registerOffice(bot);
 }

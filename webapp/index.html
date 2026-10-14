@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1120">
+  <title>QG des agents IA</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <header id="hud">
+    <div class="hud-left">
+      <div class="hud-title" id="hud-title">🏢 Mon QG</div>
+      <div class="hud-sub"><span id="hud-mode" class="badge">…</span><span id="hud-clock"></span></div>
+    </div>
+    <div class="hud-right">
+      <button class="hud-chip" id="chip-working" title="Missions en cours">⚙️ <b>0</b></button>
+      <button class="hud-chip alert" id="chip-review" title="Dossiers à valider" hidden>📁 <b>0</b></button>
+    </div>
+  </header>
+
+  <nav id="dock" aria-label="Pièces du QG"></nav>
+  <button id="fab" aria-label="Nouvelle mission">＋<span>Mission</span></button>
+
+  <section id="sheet" aria-hidden="true">
+    <div class="sheet-grip" id="sheet-grip"></div>
+    <div class="sheet-head">
+      <div class="sheet-icon" id="sheet-icon"></div>
+      <div class="sheet-titles">
+        <h2 id="sheet-title"></h2>
+        <p id="sheet-subtitle"></p>
+      </div>
+      <button class="icon-btn" id="sheet-close" aria-label="Fermer">✕</button>
+    </div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </section>
+
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <div id="splash">
+    <div class="splash-card">
+      <div class="splash-logo">🏢</div>
+      <h1>QG des agents IA</h1>
+      <p id="splash-text">Construction de l'open space…</p>
+      <div class="splash-bar"><i></i></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
