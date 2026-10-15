@@ -10,6 +10,9 @@ import { HIDING_SPOTS } from "../shared/social.js";
 import { createElevator } from "./ui/elevator.js";
 import { openMadhouseAt } from "./ui/madhouse.js";
 
+// Le code est chargé : l'écran de chargement de index.html cesse de surveiller.
+window.__qgStarted = true;
+
 const DOCK = ["overview", ...Object.keys(PANELS)];
 const ONBOARDED_KEY = "qg-onboarded-v3";
 

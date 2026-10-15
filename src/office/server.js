@@ -3,6 +3,7 @@
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import compression from "compression";
 import express from "express";
 import { validateInitData } from "./auth.js";
 import { OfficeError, getDocument, toClientState, publicResult } from "../../webapp/shared/engine.js";
@@ -14,6 +15,8 @@ const THREE_DIR = path.dirname(path.dirname(createRequire(import.meta.url).resol
 export function createOfficeApp({ service, botToken, allowedUserIds = [], ai = { enabled: false }, sendDocument = null, logger = console }) {
   const app = express();
   app.disable("x-powered-by");
+  // ~2 Mo de JavaScript (three.js compris) : compressé, ~4 fois moins à télécharger sur mobile.
+  app.use(compression());
   app.use((req, res, next) => {
     res.set("X-Content-Type-Options", "nosniff");
     res.set("Referrer-Policy", "no-referrer");

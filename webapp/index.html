@@ -9,6 +9,22 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Special+Elite&display=swap">
   <link rel="stylesheet" href="css/app.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    // Affiche tout de suite l'écran de chargement du QG au lieu de l'attente grise de Telegram,
+    // et dit ce qui bloque si le code de la mini app ne se charge pas.
+    try { window.Telegram.WebApp.ready(); } catch (e) {}
+    (function () {
+      var say = function (text) {
+        var el = document.getElementById("splash-text");
+        if (el && !window.__qgStarted) el.textContent = text;
+      };
+      window.addEventListener("error", function (e) {
+        if (e.target && e.target.tagName === "SCRIPT") say("Un fichier du QG n'a pas pu être chargé. Ferme et rouvre le QG.");
+        else if (e.message) say("Erreur au chargement du QG : " + e.message);
+      }, true);
+      setTimeout(function () { say("Le chargement est long… Vérifie ta connexion, puis ferme et rouvre le QG."); }, 20000);
+    })();
+  </script>
   <script type="importmap">
     {
       "imports": {
