@@ -22,9 +22,20 @@ function projectUrl(value) {
   return v;
 }
 
+// Un token ne contient jamais d'espace : collé depuis un téléphone, il arrive avec un caractère resté
+// dans le champ (« x 123:AAH… »), du texte autour, ou coupé en deux. On garde le morceau qui en a la forme.
+const TOKEN_SHAPE = /^\d+:[\w-]{30,}$/;
+function telegramToken(value) {
+  const v = clean(value)?.replace(/^bot(?=\d+:)/i, ""); // préfixe « bot » de l'URL de l'API recopié en trop
+  if (!v || TOKEN_SHAPE.test(v)) return v;
+  const parts = v.split(/[\s\u200B-\u200D\uFEFF]+/).map((x) => x.replace(/^bot(?=\d+:)/i, ""));
+  const found = parts.find((x) => TOKEN_SHAPE.test(x)) || [parts.join("")].find((x) => TOKEN_SHAPE.test(x));
+  if (found) console.warn("TELEGRAM_BOT_TOKEN contenait des caractères en trop : seul le token a été gardé.");
+  return found || v;
+}
+
 export const config = {
-  // Le token sert tel quel dans l'URL de l'API : un préfixe « bot » recopié en trop la casse.
-  telegramToken: clean(process.env.TELEGRAM_BOT_TOKEN)?.replace(/^bot(?=\d+:)/i, ""),
+  telegramToken: telegramToken(process.env.TELEGRAM_BOT_TOKEN),
   defaultChannelId: process.env.TELEGRAM_CHANNEL_ID || null,
   adminIds: (clean(process.env.ADMIN_USER_IDS) || "")
     .split(",")
