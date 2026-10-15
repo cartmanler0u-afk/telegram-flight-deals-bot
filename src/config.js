@@ -1,20 +1,43 @@
 import "dotenv/config";
 
+// Valeurs souvent collées depuis un téléphone : espaces, retours à la ligne ou guillemets en trop.
+function clean(value) {
+  const v = (value ?? "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  return v || undefined;
+}
+
+// supabase-js attend l'adresse du projet seule (https://xxxx.supabase.co) : une adresse copiée avec
+// /rest/v1 ou un autre chemin donne « Invalid path specified in request URL ».
+function projectUrl(value) {
+  const v = clean(value);
+  try {
+    const url = new URL(v);
+    if (url.hostname.endsWith(".supabase.co") && url.pathname !== "/") {
+      console.warn(`SUPABASE_URL contenait un chemin en trop (${url.pathname}) : seule l'adresse ${url.origin} est utilisée.`);
+      return url.origin;
+    }
+  } catch {
+    // Adresse invalide : supabase-js l'expliquera.
+  }
+  return v;
+}
+
 export const config = {
-  telegramToken: process.env.TELEGRAM_BOT_TOKEN,
+  // Le token sert tel quel dans l'URL de l'API : un préfixe « bot » recopié en trop la casse.
+  telegramToken: clean(process.env.TELEGRAM_BOT_TOKEN)?.replace(/^bot(?=\d+:)/i, ""),
   defaultChannelId: process.env.TELEGRAM_CHANNEL_ID || null,
-  adminIds: (process.env.ADMIN_USER_IDS || "")
+  adminIds: (clean(process.env.ADMIN_USER_IDS) || "")
     .split(",")
     .map((id) => id.trim())
     .filter(Boolean),
   kiwiApiKey: process.env.KIWI_API_KEY || null,
   checkIntervalMinutes: Number(process.env.CHECK_INTERVAL_MINUTES || 30),
-  supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_SECRET_KEY,
+  supabaseUrl: projectUrl(process.env.SUPABASE_URL),
+  supabaseKey: clean(process.env.SUPABASE_SECRET_KEY),
   // QG des agents IA (mini app Telegram)
-  webappUrl: process.env.WEBAPP_URL || null,
+  webappUrl: clean(process.env.WEBAPP_URL) || null,
   port: Number(process.env.PORT || 3000),
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
+  anthropicApiKey: clean(process.env.ANTHROPIC_API_KEY) || null,
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
   anthropicEffort: process.env.ANTHROPIC_EFFORT || "medium",
   anthropicWebSearch: process.env.ANTHROPIC_WEB_SEARCH !== "false",

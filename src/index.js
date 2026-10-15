@@ -23,7 +23,11 @@ bot
     if (code === 409) {
       console.error("Bot arrêté : ce token est déjà utilisé par un autre programme (409 Conflict). Arrêtez l'autre copie du bot.");
     } else if (code === 401 || code === 404) {
-      console.error("Bot arrêté : TELEGRAM_BOT_TOKEN refusé par Telegram. Vérifiez la variable.");
+      // On décrit la forme du token sans jamais l'afficher.
+      const shape = /^\d+:[\w-]{30,}$/.test(config.telegramToken)
+        ? "sa forme est correcte : il a sans doute été régénéré, recopiez le dernier donné par @BotFather"
+        : "sa forme est invalide : il doit ressembler à 123456789:AAH… (chiffres, deux-points, lettres), sans espace";
+      console.error(`Bot arrêté : TELEGRAM_BOT_TOKEN refusé par Telegram (${code}) — ${shape}.`);
     } else {
       console.error(`Bot arrêté : connexion à Telegram impossible (${err?.message || err}).`);
     }
