@@ -52,3 +52,6 @@ create table if not exists madhouse_world (
   lease_until timestamptz,
   updated_at timestamptz not null default now()
 );
+
+-- Recharge le cache de l'API Supabase : les tables créées ci-dessus sont visibles tout de suite.
+notify pgrst, 'reload schema';
