@@ -39,6 +39,7 @@ export async function startOffice(bot) {
     repository: createSupabaseRepository(supabase),
     generator,
     worldAi: { available: config.worldAi, cap: config.worldAiDailyCalls },
+    devTools: config.worldDevTools,
     notify: async (ownerId, notes, state) => {
       // Bâtiment 0 : messages déjà triés par la politique anti-spam du moteur.
       if (config.worldNotifications) {
@@ -55,7 +56,7 @@ export async function startOffice(bot) {
   });
   await service.start();
   setDealSink((deals) => service.broadcastDeals(deals));
-  registerBuilding(bot, { service, isAdmin, aiCap: config.worldAiDailyCalls });
+  registerBuilding(bot, { service, isAdmin, aiCap: config.worldAiDailyCalls, devTools: config.worldDevTools });
 
   const app = createOfficeApp({
     service,

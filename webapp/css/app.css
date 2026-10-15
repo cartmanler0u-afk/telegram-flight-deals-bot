@@ -419,7 +419,7 @@ button.chip { cursor: pointer; }
 details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; }
 
 /* ---------- Bâtiment 0 — THE MADHOUSE ---------- */
-.mh-tabs { position: sticky; top: 0; z-index: 2; padding: 6px 0 10px; background: var(--panel-solid, rgba(14, 17, 32, 0.96)); overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+.mh-tabs { position: sticky; top: -14px; z-index: 2; padding: 20px 0 10px; margin-top: -14px; background: var(--panel-solid, rgba(14, 17, 32, 0.96)); overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
 .mh-tabs::-webkit-scrollbar { display: none; }
 .mh-tabs .chip { flex: none; }
 .mh-content > * + * { margin-top: 10px; }
@@ -430,6 +430,9 @@ details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; }
 .mh-tag.bad { color: #ffb3bb; background: rgba(239, 93, 108, 0.18); }
 .mh-tag.gold { color: var(--gold); background: rgba(224, 179, 84, 0.16); }
 .mh-event p { margin: 6px 0 0; }
+.mh-absence { border-color: rgba(124, 108, 255, 0.45); }
+.mh-absence ul { margin: 8px 0 6px; padding-left: 18px; }
+.mh-absence li { margin: 3px 0; }
 .mh-event.imp-4, .mh-event.imp-5 { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .mh-event.rare { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(224, 179, 84, 0.18); }
 .mh-narration { font-style: italic; color: #d9d3ff; }
@@ -443,3 +446,52 @@ details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; }
 .mh-floor.contested { border-color: var(--warn); }
 .mh-kpis { grid-template-columns: repeat(3, 1fr); }
 .mh-kpis .kpi b { font-size: 17px; white-space: nowrap; }
+
+/* ---------- Bâtiment 0 — explorateur ---------- */
+.mh-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 8px; min-height: 4px; }
+.mh-link { background: none; border: 0; padding: 0; color: #b9b2ff; font: inherit; cursor: pointer; text-align: left; }
+.mh-link:hover { text-decoration: underline; }
+.mh-hero { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.mh-hero p { margin: 6px 0; }
+.mh-ghost-note { color: #c9b8ff; margin-top: 6px; animation: mh-flicker 3s infinite; }
+@keyframes mh-flicker { 0%, 100% { opacity: 1; } 45% { opacity: 0.55; } 50% { opacity: 0.9; } 55% { opacity: 0.4; } }
+.mh-building { margin: 10px 0; padding: 6px; border-radius: 16px; background: linear-gradient(180deg, rgba(124,108,255,0.08), rgba(255,255,255,0.02)); border: 1px solid var(--line); }
+.mh-roof { text-align: center; letter-spacing: 8px; color: var(--muted); font-size: 10px; padding: 2px 0 4px; }
+.mh-ground { height: 6px; margin-top: 4px; border-radius: 4px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.12) 0 8px, transparent 8px 14px); }
+.mh-floor-bar { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin: 3px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: inherit; font: inherit; cursor: pointer; text-align: left; transition: transform 0.12s, border-color 0.12s; }
+.mh-floor-bar:hover { transform: translateX(2px); border-color: var(--accent); }
+.mh-floor-bar .mh-level { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; background: var(--card-strong); flex: none; }
+.mh-floor-name { display: flex; flex-direction: column; min-width: 0; }
+.mh-floor-name .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mh-floor-bar.hot { border-color: rgba(242, 165, 65, 0.6); }
+.mh-floor-bar.locked { opacity: 0.6; border-style: dashed; }
+.mh-floor-bar.anomalie { background: linear-gradient(90deg, rgba(124,108,255,0.14), var(--card)); }
+.mh-floor-bar.owner { background: linear-gradient(90deg, rgba(224,179,84,0.16), var(--card)); }
+.mh-floor-bar.ghost-rumor { cursor: default; border-style: dotted; opacity: 0.7; }
+.mh-dots { display: flex; gap: 2px; flex-wrap: wrap; max-width: 64px; }
+.mh-dots i { width: 5px; height: 5px; border-radius: 50%; background: #7ee2a8; }
+.mh-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+.mh-room { text-align: left; color: inherit; font: inherit; cursor: pointer; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); display: flex; flex-direction: column; gap: 4px; }
+.mh-room:hover { border-color: var(--accent); }
+.mh-room.empty { opacity: 0.72; }
+.mh-room-icon { font-size: 18px; }
+.mh-room.meeting { border-left: 3px solid #5aa9e6; }
+.mh-room.food { border-left: 3px solid #f4a259; }
+.mh-room.social { border-left: 3px solid #4cc38a; }
+.mh-room.secret, .mh-room.special { border-left: 3px solid #9b5de5; }
+.mh-room.rest { border-left: 3px solid #8fa3bf; }
+.mh-pawns { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.mh-pawn { display: flex; gap: 8px; align-items: center; text-align: left; padding: 6px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: inherit; font: inherit; cursor: pointer; }
+.mh-pawn:hover { border-color: var(--accent); }
+.mh-pawn.asleep { opacity: 0.55; }
+.mh-pawn.star .mh-face { box-shadow: 0 0 0 2px var(--gold); }
+.mh-pawn-text { display: flex; flex-direction: column; min-width: 0; }
+.mh-pawn-text > * { overflow: hidden; text-overflow: ellipsis; }
+.mh-face { width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; background: hsl(var(--h, 250) 55% 42%); }
+.mh-face.big { width: 48px; height: 48px; font-size: 17px; }
+.mh-bubble { margin-top: 6px; padding: 6px 10px; border-radius: 12px 12px 12px 4px; background: rgba(124, 108, 255, 0.12); border: 1px solid rgba(124, 108, 255, 0.25); }
+.mh-event.debug { border-style: dashed; }
+.mh-object { width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.mh-debug pre { white-space: pre-wrap; max-height: 260px; overflow: auto; font-size: 11px; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 8px; }
+.center { text-align: center; }
+.field input[type="range"] { width: 100%; }

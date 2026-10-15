@@ -11,7 +11,7 @@ import { whyLine } from "./report.js";
 
 const AMBITIONS = { power: "le pouvoir", wealth: "la fortune", fame: "la célébrité", truth: "la vérité", stability: "la tranquillité", protect: "protéger les siens", change_role: "changer de rôle" };
 const STATUS = { active: "en poste", fired: "licencié (toujours dans le Bâtiment)", admin_dead: "mort administrativement", double: "double non reconnu", missing: "disparu", retired: "retraité" };
-const REL_LABELS = { ami: "ami·e", bff: "meilleur·e ami·e", couple: "en couple", crush: "béguin", rival: "rival·e", ex: "ex", mentor: "mentor" };
+export const REL_LABELS = { ami: "ami·e", bff: "meilleur·e ami·e", couple: "en couple", crush: "béguin", rival: "rival·e", ex: "ex", mentor: "mentor", connaissance: "connaissance" };
 const SKILLS = { negotiation: "négociation", investigation: "enquête", charisma: "charisme", cunning: "ruse" };
 
 const floorName = (world, id) => world.building.floors[id]?.name || "étage inconnu";
@@ -36,11 +36,14 @@ export function relationsView(state, world, id) {
   const all = [...Object.values(state.life?.relations || {}), ...Object.values(world.relations || {})];
   return all
     .filter((r) => (r.a === id || r.b === id) && world.people[r.a === id ? r.b : r.a])
+    .filter((r) => r.kind !== "connaissance" || Math.abs(r.score) >= 15)
     .map((r) => {
       const other = r.a === id ? r.b : r.a;
-      return { id: other, name: personName(world, other), kind: r.kind, label: REL_LABELS[r.kind] || r.kind, score: r.score, note: r.note };
+      const mine = r.ab === undefined ? r.score : r.a === id ? r.ab : r.ba;
+      const theirs = r.ab === undefined ? r.score : r.a === id ? r.ba : r.ab;
+      return { id: other, name: personName(world, other), kind: r.kind, label: REL_LABELS[r.kind] || r.kind, score: r.score, mine, theirs, asymmetric: Math.sign(mine) !== Math.sign(theirs) && Math.abs(mine - theirs) >= 30, note: r.note };
     })
-    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+    .sort((a, b) => Math.abs(b.mine) + Math.abs(b.theirs) - Math.abs(a.mine) - Math.abs(a.theirs));
 }
 
 // Fiche complète d'un personnage (ce que le Bâtiment sait publiquement de lui).

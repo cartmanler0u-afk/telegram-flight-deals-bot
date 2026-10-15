@@ -2,13 +2,31 @@
 // a changé le Bâtiment, on explique POURQUOI (chaînes causales enregistrées) et on sépare
 // clairement les faits établis, les rumeurs et les hypothèses.
 
-import { esc, credits, localParts } from "./core.js";
+import { esc, credits, localParts, HOUR } from "./core.js";
 import { causalChain } from "./memory.js";
 import { accountOf, balance } from "./ops.js";
 
 const POWER_KINDS = new Set(["election", "law_enacted", "law_rejected", "coup", "coup_failed", "promotion", "floor_vote", "ruling", "found_org", "strike", "strike_end"]);
 const ECONOMY_KINDS = new Set(["bankruptcy", "rescue", "mint", "loan_default", "comeback", "boss_invest", "startup", "unpaid_wages", "dividends"]);
 const LABEL = { fact: "✅ Fait", rumor: "🗣️ Rumeur — non vérifiée", hypothesis: "🔮 Hypothèse" };
+
+// Catégories comptées pour le rapport d'absence (au moment où l'événement se produit).
+const MEDIA_KINDS = new Set(["article", "scoop", "smear", "leak", "viral_video", "viral_aftermath", "radio", "interview"]);
+const ALLIANCE_KINDS = new Set(["found_org", "join_org", "alliance", "coalition", "pact", "merger"]);
+const CRISIS_KINDS = new Set(["bankruptcy", "strike", "coup", "coup_failed", "burnout", "blackout", "meeting_meltdown", "coffee_breakdown", "supply_heist", "packages_vanish", "admin_death", "disappearance", "unpaid_wages", "loan_default", "company_trouble", "evacuation"]);
+const LOSS_KINDS = new Set(["bankruptcy", "fines", "supply_heist", "theft", "loan_default", "unpaid_wages", "company_trouble", "scam", "invest_loss"]);
+
+export function eventCategories(event) {
+  const tags = event.tags || [];
+  const cats = [];
+  if (MEDIA_KINDS.has(event.kind) || tags.includes("médias")) cats.push("medias");
+  if (ALLIANCE_KINDS.has(event.kind)) cats.push("alliances");
+  if (CRISIS_KINDS.has(event.kind) || (event.importance >= 4 && tags.some((t) => ["scandale", "conflit", "dette"].includes(t)))) cats.push("crises");
+  if (event.kind === "law_enacted" || event.kind === "law_rejected") cats.push("lois_votees");
+  else if (event.kind === "law_proposed") cats.push("lois_proposees");
+  if (LOSS_KINDS.has(event.kind) || tags.includes("vol") || tags.includes("dette")) cats.push("pertes");
+  return cats;
+}
 
 function when(world, at) {
   const { hour, minute, dayKey } = localParts(world, at);
@@ -21,6 +39,84 @@ export function whyLine(world, event) {
   const chain = causalChain(world, event.id, 4);
   if (chain.length < 2) return null;
   return chain.slice(0, -1).map((e) => e.title).join(" → ");
+}
+
+// « RAPPORT D'ABSENCE — 8 HEURES » : uniquement des chiffres enregistrés (statistiques horaires du
+// moteur, journal), et une mention honnête du temps qui n'a pas été simulé.
+export function absenceSummary(world, { since, until = Date.now() }) {
+  const hours = Math.max(0, (until - since) / HOUR);
+  // Statistiques horaires : un créneau compte s'il a enregistré de l'activité pendant l'absence.
+  const buckets = (world.metrics || []).filter((b) => (b.last ?? b.at) > since && b.at <= until);
+  const sum = (key) => buckets.reduce((n, b) => n + (b[key] || 0), 0);
+  const cycles = sum("cycles");
+  const rareByFloor = {};
+  for (const b of buckets) for (const [k, v] of Object.entries(b)) if (k.startsWith("rare_")) rareByFloor[k.slice(5)] = (rareByFloor[k.slice(5)] || 0) + v;
+  // Cibles des médias : personnes citées par les médias (hors journalistes), d'après le journal.
+  const targets = {};
+  for (const e of world.events) {
+    if (!(e.at > since && e.at <= until) || !e.public || !eventCategories(e).includes("medias")) continue;
+    for (const id of e.actors || []) {
+      const p = world.people[id];
+      if (p && p.dept !== "medias" && p.kind !== "animal") targets[id] = (targets[id] || 0) + 1;
+    }
+  }
+  const gaps = (world.gaps || []).filter((g) => g.to > since && g.from < until);
+  const skippedMs = gaps.reduce((n, g) => n + Math.max(0, Math.min(g.to, until) - Math.max(g.from, since)), 0);
+  const step = world.config.cycleMinutes * 60000;
+  const behindMs = Math.max(0, until - world.lastCycleAt - step);
+  const oldest = world.metrics?.[0]?.at ?? until;
+  return {
+    hours,
+    cycles,
+    simulatedHours: (cycles * world.config.cycleMinutes) / 60,
+    counts: {
+      events: sum("events"),
+      rare: sum("rare"),
+      relations: sum("relations"),
+      met: sum("met"),
+      rumors: sum("rumors") + sum("rumors_spread"),
+      alliances: sum("cat_alliances"),
+      crises: sum("cat_crises"),
+      lawsVoted: sum("cat_lois_votees"),
+      lawsProposed: sum("cat_lois_proposees"),
+      losses: sum("cat_pertes"),
+      moneyLost: sum("money_lost"),
+      arguments: sum("arguments"),
+      romances: sum("romances"),
+      moves: sum("moves"),
+    },
+    rareByFloor: Object.entries(rareByFloor).map(([floor, n]) => ({ floor, name: world.building.floors[floor]?.short || floor, n })).sort((a, b) => b.n - a.n),
+    mediaTargets: Object.entries(targets).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id, n]) => ({ id, name: world.people[id].name, n })),
+    skippedHours: skippedMs / HOUR,
+    behindHours: behindMs / HOUR,
+    partial: oldest > since + HOUR,
+  };
+}
+
+function hoursLabel(h) {
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} MINUTES`;
+  const n = Math.round(h);
+  return n >= 48 ? `${Math.round(h / 24)} JOURS` : `${n} HEURE${n > 1 ? "S" : ""}`;
+}
+
+function absenceLines(a) {
+  const c = a.counts;
+  const plural = (n, one, many = `${one}s`) => `${n} ${n > 1 ? many : one}`;
+  const lines = [];
+  lines.push(`${plural(a.cycles, "cycle simulé", "cycles simulés")} (${Math.round(a.simulatedHours * 10) / 10} h de vie du Bâtiment)`);
+  lines.push(`${plural(c.events, "événement")}${c.rare ? `, dont ${plural(c.rare, "rare")}` : ""}${a.rareByFloor.length ? ` (${a.rareByFloor.map((f) => `${f.name} : ${f.n}`).join(", ")})` : ""}`);
+  lines.push(`${plural(c.relations, "relation a changé de nature", "relations ont changé de nature")} (amitiés, rivalités…) · ${plural(c.met, "nouvelle connaissance", "nouvelles connaissances")}`);
+  lines.push(`${plural(c.arguments, "dispute")} · ${plural(c.romances, "idylle")}`);
+  lines.push(`${plural(c.rumors, "rumeur nouvelle ou propagée", "rumeurs nouvelles ou propagées")} · ${plural(c.alliances, "alliance ou adhésion", "alliances ou adhésions")}`);
+  lines.push(`${plural(c.crises, "crise")} · ${plural(c.lawsVoted, "loi votée ou rejetée", "lois votées ou rejetées")}${c.lawsProposed ? ` · ${plural(c.lawsProposed, "loi proposée", "lois proposées")}` : ""}`);
+  if (c.losses) lines.push(`${plural(c.losses, "perte d'argent", "pertes d'argent")}${c.moneyLost ? ` : ${credits(c.moneyLost)} au total` : ""}`);
+  if (a.mediaTargets.length) lines.push(`Cibles des médias : ${a.mediaTargets.map((t) => `${t.name}${t.n > 1 ? ` (×${t.n})` : ""}`).join(", ")}`);
+  const honest = [];
+  if (a.skippedHours >= 0.5) honest.push(`${Math.round(a.skippedHours)} h n'ont PAS été simulées (serveur arrêté au-delà de la limite de rattrapage) : rien n'y est inventé`);
+  if (a.behindHours >= 0.5) honest.push(`rattrapage en cours : ${Math.round(a.behindHours * 10) / 10} h restent à simuler`);
+  if (a.partial) honest.push("statistiques détaillées conservées 8 jours : le début de la période n'est pas compté");
+  honest.push("chiffres issus des statistiques horaires du moteur (à l'heure près)");
+  return { lines, honest };
 }
 
 export function buildReport(world, { since = 0, until = Date.now(), max = 6 } = {}) {
@@ -93,7 +189,9 @@ export function buildReport(world, { since = 0, until = Date.now(), max = 6 } = 
     counts: { events: events.length, notable: notableEvents.length, rare: rare.length, rejected: world.proposals.filter((p) => p.status === "rejected" && p.cycle >= cycleAt(world, since)).length },
     weather: weather(world),
   };
-  const report = { ...head, notable, sections };
+  const absence = since && until - since >= HOUR ? absenceSummary(world, { since, until }) : null;
+  if (absence) head.title = `RAPPORT D'ABSENCE — ${hoursLabel(absence.hours)}`;
+  const report = { ...head, notable, sections, absence, stats: absence ? absenceLines(absence) : null };
   report.html = toHtml(world, report);
   report.text = toText(report);
   return report;
@@ -125,6 +223,10 @@ function weather(world) {
 
 function toHtml(world, r) {
   const lines = [`<b>🏢 ${esc(world.name)} — ${esc(r.title)}</b>`, `<i>${esc(r.span)}</i>`, esc(r.weather)];
+  if (r.absence) {
+    const { lines: stats, honest } = absenceLines(r.absence);
+    lines.push("", "<b>📊 En chiffres</b>", ...stats.map((l) => `• ${esc(l)}`), ...honest.map((l) => `<i>⚠️ ${esc(l)}</i>`));
+  }
   if (!r.sections.length) lines.push("", "Rien de notable. Le Bâtiment fait semblant de dormir.");
   for (const s of r.sections) {
     lines.push("", `<b>${s.icon} ${esc(s.title)}</b>`);
@@ -140,6 +242,10 @@ function toHtml(world, r) {
 
 function toText(r) {
   const lines = [`🏢 ${r.title} (${r.span})`, r.weather];
+  if (r.absence) {
+    const { lines: stats, honest } = absenceLines(r.absence);
+    lines.push("", "📊 En chiffres", ...stats.map((l) => `• ${l}`), ...honest.map((l) => `⚠️ ${l}`));
+  }
   for (const s of r.sections) {
     lines.push("", `${s.icon} ${s.title}`);
     for (const item of s.items) {

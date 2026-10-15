@@ -6,6 +6,7 @@
 
 import { MYSTERY_SEEDS } from "./cast.js";
 import { worldId, atPlace, withArticle } from "./core.js";
+import { GHOST_FLOOR } from "./building.js";
 import { accountOf } from "./ops.js";
 import { hasLaw } from "./politics.js";
 
@@ -45,7 +46,7 @@ function leverage(world, m, inv, night) {
   if (m.dynamic) return 1;
   if (m.id === "m-floor13") return inv.flags.visited13 ? 2 : 0.3;
   if (m.id === "m-nightroom") return night && inv.traits.includes("nightowl") ? 2.5 : night ? 1 : 0.25;
-  if (m.id === "m-employee0") return inv.floor === "f9" || inv.id === "r-ambroise" ? 1 : 0.3;
+  if (m.id === "m-employee0") return inv.floor === "f2" || inv.id === "r-ambroise" ? 1 : 0.3;
   return 1;
 }
 
@@ -157,15 +158,15 @@ function solveMystery(cx, m, solver) {
   const followups = [];
   let consequence = "";
   if (m.id === "m-floor13") {
-    ops.push({ op: "floor", id: "f13", set: { discovered: true, status: "contested", note: t.text } });
+    ops.push({ op: "floor", id: GHOST_FLOOR, set: { discovered: true, status: "contested", note: t.text } });
     if (t.id === "sealed") {
       ops.push({ op: "person", id: "r-arlette", reputation: -15 });
-      consequence = "Le Syndic a menti pendant des années. L'Hémicycle devra décider si l'Étage 13 entre au Plan Officiel.";
+      consequence = "Le Syndic a menti pendant des années. L'Hémicycle devra décider si l'Étage 10 entre au Plan Officiel.";
     } else {
       ops.push({ op: "person", id: "r-edith", reputation: -10 }, { op: "company", id: "labo", action: "set", set: { reputation: 35 } }, { op: "building", pressure: 10 });
       consequence = "Le Laboratoire a fabriqué un étage par accident. Personne ne sait comment le retirer.";
     }
-    followups.push({ op: "schedule", dueCycle: world.cycle + DAYC, kind: "floor_vote", payload: { floor: "f13" } });
+    followups.push({ op: "schedule", dueCycle: world.cycle + DAYC, kind: "floor_vote", payload: { floor: GHOST_FLOOR } });
   } else if (m.id === "m-employee0") {
     if (t.id === "arlette") {
       ops.push({ op: "person", id: "r-arlette", reputation: -25 }, { op: "account", id: "emp0", frozen: true });
@@ -227,16 +228,16 @@ export function anomaliesCycle(cx) {
   const pressure = b.pressure + (world.flags.auditUntil > world.cycle ? 10 : 0);
   const people = Object.values(world.people).filter((p) => p.status === "active" && p.kind !== "animal");
 
-  // L'Ascenseur B s'arrête à l'Étage 13.
+  // L'Ascenseur B s'arrête à l'Étage fantôme (le passager y est réellement déposé).
   if (rng.chance(pressure / 2600)) {
     const p = rng.pick(people);
     if (p) {
       cx.commit({
         source: "system",
         kind: "floor13_stop",
-        ops: [{ op: "person", id: p.id, set: { flags: { ...p.flags, visited13: world.cycle } } }, { op: "floor", id: "f13", anomaly: 5 }, { op: "building", pressure: 3 }],
-        event: { kind: "floor13_stop", title: `${p.name} a passé vingt minutes à l'Étage 13`, text: `L'Ascenseur B s'est ouvert sur un couloir que personne n'a jamais vu. ${p.name} en est revenu ${rng.pick(["avec une plante qui n'existe pas aux Serres", "en parlant d'une moquette « trop parfaite »", "avec dix minutes d'avance sur sa montre", "sans pouvoir décrire ce qu'il a vu"])}.`, actors: [p.id], importance: 3, tags: ["anomalie", "étage 13"] },
-        facts: [{ text: `${p.name} affirme être allé à l'Étage 13.`, about: [p.id, "f13"], status: "rumor", truth: true, knownBy: [p.id], mystery: "m-floor13" }],
+        ops: [{ op: "person", id: p.id, set: { flags: { ...p.flags, visited13: world.cycle } } }, { op: "move", id: p.id, to: `${GHOST_FLOOR}.couloir`, force: true, activity: { kind: "special", label: "cherche la sortie d'un couloir qui tourne à gauche" } }, { op: "floor", id: GHOST_FLOOR, anomaly: 5 }, { op: "building", pressure: 3 }],
+        event: { kind: "floor13_stop", title: `${p.name} a passé vingt minutes à l'Étage fantôme`, room: `${GHOST_FLOOR}.couloir`, text: `L'Ascenseur B s'est ouvert sur un couloir que personne n'a jamais vu. ${p.name} en est revenu ${rng.pick(["avec une plante qui n'existe pas aux Serres", "en parlant d'une moquette « trop parfaite »", "avec dix minutes d'avance sur sa montre", "sans pouvoir décrire ce qu'il a vu"])}.`, actors: [p.id], importance: 3, tags: ["anomalie", "étage fantôme"] },
+        facts: [{ text: `${p.name} affirme être allé à l'Étage fantôme.`, about: [p.id, GHOST_FLOOR], status: "rumor", truth: true, knownBy: [p.id], mystery: "m-floor13" }],
       });
     }
   }
@@ -281,7 +282,7 @@ function createDouble(cx, original) {
     ambition: { kind: rng.pick(["power", "wealth", "fame"].filter((k) => k !== original.ambition?.kind)) },
     memories: [...original.memories],
     knows: [...original.knows],
-    career: [{ cycle: world.cycle, text: "Sorti de l'Ascenseur B au retour de l'Étage 13" }],
+    career: [{ cycle: world.cycle, text: "Sorti de l'Ascenseur B au retour de l'Étage fantôme" }],
     flags: { double: true },
     cooldownUntil: 0,
   };
@@ -298,7 +299,7 @@ function createDouble(cx, original) {
     event: {
       kind: "double",
       title: `DEUX ${original.name.toUpperCase()} : un double sort de l'Ascenseur B`,
-      text: `Quelques jours après sa visite à l'Étage 13, un second ${original.name} se présente au Hall. Mêmes souvenirs jusqu'au mardi, ambitions différentes depuis. Les deux revendiquent le même badge, le même bureau et le même compte. Le Registre refuse de choisir.`,
+      text: `Quelques jours après sa visite à l'Étage fantôme, un second ${original.name} se présente au Hall. Mêmes souvenirs jusqu'au mardi, ambitions différentes depuis. Les deux revendiquent le même badge, le même bureau et le même compte. Le Registre refuse de choisir.`,
       actors: [original.id],
       causes: cx.recent((e) => e.kind === "floor13_stop" && e.actors.includes(original.id), 4 * DAYC).map((e) => e.id).slice(-1),
       importance: 5,
@@ -342,21 +343,23 @@ function adminDeath(cx, victim) {
 function corridor(cx) {
   const { world, rng } = cx;
   const levels = Object.values(world.building.floors).map((f) => f.level);
-  const base = rng.pick(levels.filter((l) => l >= 0 && l < 12 && !levels.includes(l + 0.5)));
+  const base = rng.pick(levels.filter((l) => l >= 0 && l < 12 && l !== 10));
   if (base === undefined) return null;
-  const id = `fx${world.cycle}`;
+  const floor = Object.values(world.building.floors).find((f) => f.level === base);
+  if (!floor) return null;
+  const id = `${floor.id}.x${world.cycle.toString(36)}`;
   const name = rng.pick([`Couloir ${base}½`, `Palier ${base} bis`, `Mezzanine du ${base}`]);
   return cx.commit({
     source: "system",
     kind: "corridor",
     ops: [
-      { op: "floor", action: "add", floor: { id, level: base + 0.5, name, kind: "anomalie", status: "contested", onPlan: false, blurb: "Apparu sans permis de construire. Absent du Plan Officiel." } },
-      { op: "anomaly", anomaly: { kind: "corridor", scope: { floors: [id] }, effects: ["nouvel espace hors Plan"] } },
-      { op: "schedule", dueCycle: world.cycle + DAYC, kind: "floor_vote", payload: { floor: id } },
+      { op: "room", action: "add", room: { id, floor: floor.id, name, kind: "special", desc: "Apparu sans permis de construire. De la moquette, un distributeur de boissons et une plante en pot. Absent du Plan Officiel.", onPlan: false } },
+      { op: "anomaly", anomaly: { kind: "corridor", scope: { floor: floor.id, room: id }, effects: ["nouvel espace hors Plan"] } },
+      { op: "schedule", dueCycle: world.cycle + DAYC, kind: "floor_vote", payload: { room: id } },
       { op: "building", pressure: -20 },
     ],
     event: { kind: "corridor", title: `Un « ${name} » apparaît entre deux étages`, text: `Il n'y était pas hier. Il y a de la moquette, un distributeur de boissons et une plante en pot. Le Plan Officiel ne le mentionne pas : l'Hémicycle devra décider de son existence légale.`, actors: ["r-ambroise", "r-arlette"].filter((x) => world.people[x]), importance: 4, rare: true, tags: ["anomalie", "bâtiment"] },
-    facts: [{ text: `Un espace nommé « ${name} » est apparu hors du Plan Officiel.`, about: [id], public: true }],
+    facts: [{ text: `Un espace nommé « ${name} » est apparu hors du Plan Officiel.`, about: [floor.id], public: true }],
   });
 }
 

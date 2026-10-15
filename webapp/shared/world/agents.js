@@ -164,7 +164,7 @@ function radio(cx, p) {
     source: "agent",
     kind: "radio",
     ops: [{ op: "person", id: p.id, reputation: delta }],
-    event: { kind: "radio", title: flop ? `${p.name} rate son passage sur Radio Cage d'Escalier` : `${p.name} brille sur Radio Cage d'Escalier`, text: flop ? `Interrogé sur « ${rng.pick(["le sens de l'Étage 13", "le prix du fromage", "sa relation avec l'Ascenseur B", "la Charte des Murs"])} », ${p.name} a répondu par un long silence, puis par « synergie ».` : `${p.name} défend ses idées avec aplomb. Les auditeurs du 8e appellent pour en redemander.`, actors: [p.id, host.id], importance: 2, tags: ["médias"] },
+    event: { kind: "radio", title: flop ? `${p.name} rate son passage sur Radio Cage d'Escalier` : `${p.name} brille sur Radio Cage d'Escalier`, text: flop ? `Interrogé sur « ${rng.pick(["le sens de l'Étage fantôme", "le prix du fromage", "sa relation avec l'Ascenseur B", "la Charte des Murs"])} », ${p.name} a répondu par un long silence, puis par « synergie ».` : `${p.name} défend ses idées avec aplomb. Les auditeurs du 8e appellent pour en redemander.`, actors: [p.id, host.id], importance: 2, tags: ["médias"] },
   });
 }
 
@@ -421,7 +421,7 @@ export function influenceCycle(cx) {
     const ghost = p.status === "admin_dead" ? -10 : 0;
     p.influence = Math.round(clamp(p.reputation * 0.5 + wealth + titles + buzz + ghost, 0, 100));
     p.influenceHistory.push({ day: cx.dayKey, value: p.influence });
-    if (p.influenceHistory.length > 14) p.influenceHistory.shift();
+    if (p.influenceHistory.length > 8) p.influenceHistory.shift();
     p.reputation = Math.round(p.reputation + (50 - p.reputation) * 0.02);
   }
 }

@@ -1,6 +1,7 @@
 // Politique et justice : Parlement (dépôt, vote, quorum, abrogation), lois qui modifient
 // réellement la simulation, élections, et Tribunal des Couloirs.
 
+import { PARLIAMENT_FLOOR, COURT_FLOOR } from "./building.js";
 import { LAW_CATALOG } from "./cast.js";
 import { credits, worldId } from "./core.js";
 import { accountOf, balance } from "./ops.js";
@@ -14,7 +15,7 @@ export function hasLaw(world, code) {
 
 export function canVote(world, p) {
   if (!p) return false;
-  if (p.kind === "animal" && !hasLaw(world, "animal_personhood")) return false;
+  if (p.kind === "animal" && !hasLaw(world, "animal_personhood") && !(p.species === "pigeon" && hasLaw(world, "pigeon_vote"))) return false;
   if (p.status === "active" || p.status === "double") return true;
   if (["fired", "admin_dead"].includes(p.status)) return hasLaw(world, "fired_vote");
   return false;
@@ -83,7 +84,7 @@ function session(cx) {
   const { world, rng } = cx;
   const deputies = world.parliament.seats.map((id) => world.people[id]).filter(Boolean);
   if (!deputies.length) return;
-  const present = deputies.filter((d) => canReachFloor(world, d, "f4") && !["missing"].includes(d.status));
+  const present = deputies.filter((d) => canReachFloor(world, d, PARLIAMENT_FLOOR) && !["missing"].includes(d.status));
   const absent = deputies.filter((d) => !present.includes(d));
   world.parliament.sessions += 1;
 
@@ -179,6 +180,18 @@ function applyLawOnEnactment(cx, law, event) {
       event: { kind: "animals_vote", title: "Les animaux du Bâtiment deviennent des personnes", text: `${animals.map((a) => a.name).join(", ")} peuvent désormais voter, posséder un compte et se présenter aux élections.`, actors: animals.map((a) => a.id).slice(0, 6), causes: [event.id], importance: 4, tags: ["politique", "animaux"] },
     });
   }
+  if (law.code === "ceo_real_work") {
+    const ceo = Object.values(world.people).find((p) => p.flags?.ceo && p.status === "active");
+    if (ceo) {
+      cx.commit({
+        source: "system",
+        kind: "ceo_work",
+        key: `ceowork:${law.id}`,
+        ops: [{ op: "person", id: ceo.id, set: { flags: { ...ceo.flags, goTo: { room: "f0.cafeteria", until: world.cycle + 16, reason: "Loi du Retour au Réel" } } }, career: "Journée de travail réel (plonge à la Cafétéria)" }],
+        event: { kind: "ceo_work", title: `${ceo.name} fait la plonge à la Cafétéria`, text: `En application de la Loi du Retour au Réel, ${ceo.name} passe la journée en cuisine. Il demande où se trouve « le bouton pour déléguer ».`, actors: [ceo.id, "r-gaspard"].filter((id) => world.people[id]), room: "f0.cafeteria", causes: [event.id], importance: 4, tags: ["politique", "direction"] },
+      });
+    }
+  }
   if (law.code === "registry_audit") {
     cx.commit({ source: "system", kind: "audit", ops: [{ op: "building", pressure: 8 }, { op: "schedule", dueCycle: world.cycle + 3 * 48, kind: "audit_end", payload: { law: law.id } }] });
     world.flags.auditUntil = world.cycle + 3 * 48;
@@ -192,7 +205,7 @@ function lawEffects(cx) {
   if (hasLaw(world, "forbidden_word")) {
     for (const p of Object.values(world.people)) {
       if (p.kind === "animal" || p.status !== "active") continue;
-      if ((p.traits.includes("showoff") || p.traits.includes("hustler")) && rng.chance(0.25)) fines.push([p, 15, "a dit « synergie »"]);
+      if ((p.traits.includes("showoff") || p.traits.includes("hustler") || p.archetype === "startupper") && rng.chance(0.2)) fines.push([p, 5, "a dit « synergie »", -5]);
     }
   }
   if (hasLaw(world, "nap_tax")) {
@@ -208,12 +221,20 @@ function lawEffects(cx) {
       } else fines.push([p, 30, "aucune plante déclarée"]);
     }
   }
+  if (hasLaw(world, "meeting_47")) {
+    // Les réunions s'éternisent : les participants y restent au moins un cycle de plus.
+    for (const p of Object.values(world.people)) {
+      const room = world.building.rooms?.[p.location];
+      if (room?.kind === "meeting" && p.status === "active" && !p.flags.goTo) p.flags = { ...p.flags, goTo: { room: p.location, until: world.cycle + 2, reason: "Loi des 47 Minutes" } };
+    }
+  }
   const ops = [];
   const fined = [];
-  for (const [p, amount, why] of fines) {
+  for (const [p, amount, why, rep] of fines) {
     const acct = accountOf("p", p.id);
     if (balance(world, acct) >= amount && !world.accounts[acct].frozen) {
       ops.push({ op: "transfer", from: acct, to: "treasury", amount, reason: `Amende : ${why}` });
+      if (rep) ops.push({ op: "person", id: p.id, reputation: rep });
       fined.push(`${p.name} (${why})`);
     }
   }
@@ -312,7 +333,7 @@ function tribunal(cx) {
   const judge = world.people["r-hermine"];
   const docket = Object.values(world.cases).filter((c) => c.status === "filed" && world.cycle - c.filedCycle >= 2).slice(0, 2);
   if (!docket.length) return;
-  if (!judge || judge.status !== "active" || !canReachFloor(world, judge, "f5")) {
+  if (!judge || judge.status !== "active" || !canReachFloor(world, judge, COURT_FLOOR)) {
     cx.commit({ source: "system", kind: "court_delay", key: `courtdelay:${cx.dayKey}`, event: { kind: "court_delay", title: "Audiences reportées : la juge n'a pas pu rejoindre le Tribunal", text: "L'Ascenseur B a refusé de monter au 5e. Les justiciables patientent dans le couloir.", actors: [judge?.id].filter(Boolean), importance: 2, tags: ["justice"] } });
     return;
   }

@@ -90,5 +90,6 @@ export function attachWorldNarration(state, jobId, result, meta = {}, now = Date
   world.ai.log ||= [];
   world.ai.log.push({ at: now, eventId: job.eventId, status: job.status, in: result?.usage?.input_tokens || 0, out: result?.usage?.output_tokens || 0, error: meta.error ? String(meta.error).slice(0, 120) : null });
   if (world.ai.log.length > MAX_LOG) world.ai.log.splice(0, world.ai.log.length - MAX_LOG);
+  world.rev = (world.rev || 0) + 1;
   return true;
 }

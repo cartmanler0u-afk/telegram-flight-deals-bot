@@ -4,7 +4,8 @@
 // avant d'appliquer l'ensemble ; sinon rien n'est appliqué et le rejet est journalisé.
 
 import { clampText, worldId } from "./core.js";
-import { addFact, learn, publicize, recordEvent, findEvent } from "./memory.js";
+import { addFact, learn, publicize, recordEvent, findEvent, believe } from "./memory.js";
+import { accessDenied } from "./building.js";
 
 export const ACCOUNT_KINDS = { p: "person", c: "company", o: "org" };
 
@@ -25,8 +26,11 @@ export function totalMoney(world) {
   return Object.values(world.accounts).reduce((s, a) => s + a.balance, 0);
 }
 
-const PERSON_FIELDS = new Set(["status", "title", "floor", "ambition", "employer", "salary", "flags", "doubleOf", "kind", "name"]);
-const FLOOR_FIELDS = new Set(["status", "onPlan", "discovered", "controller", "note", "name"]);
+const PERSON_FIELDS = new Set(["status", "title", "floor", "ambition", "employer", "salary", "flags", "doubleOf", "kind", "name", "dept", "workRoom", "homeRoom", "goals", "mood"]);
+// Un changement de rôle doit toujours être justifié (entrée de carrière).
+const ROLE_FIELDS = ["title", "dept", "employer", "workRoom"];
+const OBJECT_FIELDS = new Set(["state", "room", "owner", "name", "desc", "value", "hidden"]);
+const FLOOR_FIELDS = new Set(["status", "onPlan", "discovered", "controller", "note", "name", "rules"]);
 const COMPANY_FIELDS = new Set(["status", "ceo", "price", "demand", "reputation", "note"]);
 const LOAN_FIELDS = new Set(["status", "balance", "dueCycle", "rate", "note", "missed", "sued"]);
 const ORG_FIELDS = new Set(["status", "leader", "goal", "reputation", "kind", "public"]);
@@ -61,7 +65,7 @@ const OPS = {
     validate(w, op, shadow, proposal) {
       if (proposal.source !== "system") return "seul le Trésor du Syndic peut émettre des Crédits (Charte, R3)";
       if (op.to !== "treasury") return "l'émission se fait uniquement vers le Trésor";
-      if (!isInt(op.amount) || op.amount <= 0 || op.amount > 20000) return "montant d'émission invalide";
+      if (!isInt(op.amount) || op.amount <= 0 || op.amount > 80000) return "montant d'émission invalide";
       shadow.set("treasury", (shadow.get("treasury") ?? w.accounts.treasury.balance) + op.amount);
       return null;
     },
@@ -86,6 +90,8 @@ const OPS = {
     validate(w, op) {
       if (!w.people[op.id]) return `personnage inconnu (${op.id})`;
       for (const key of Object.keys(op.set || {})) if (!PERSON_FIELDS.has(key)) return `champ non modifiable (${key})`;
+      if (ROLE_FIELDS.some((k) => op.set?.[k] !== undefined && op.set[k] !== w.people[op.id][k]) && !op.career) return "changement de rôle sans raison consignée";
+      if (op.set?.workRoom && !w.building.rooms?.[op.set.workRoom]) return `pièce inconnue (${op.set.workRoom})`;
       return null;
     },
     apply(w, op) {
@@ -106,6 +112,92 @@ const OPS = {
     apply(w, op) {
       w.people[op.person.id] = op.person;
       ensureAccount(w, accountOf("p", op.person.id), { owner: op.person.id, kind: "person" });
+    },
+  },
+  // Déplacements : chaque personnage n'a qu'une localisation, une pièce existante et accessible.
+  move: {
+    validate(w, op, shadow, proposal) {
+      const p = w.people[op.id];
+      const room = w.building.rooms?.[op.to];
+      if (!p) return `personnage inconnu (${op.id})`;
+      if (!room) return `pièce inconnue (${op.to})`;
+      if (!op.force) {
+        const denied = accessDenied(w, p, room, { hour: proposal.hour ?? 12, laws: proposal.laws || [] });
+        if (denied) return `accès refusé à ${room.name} : ${denied}`;
+      }
+      return null;
+    },
+    apply(w, op) {
+      const p = w.people[op.id];
+      p.location = op.to;
+      if (op.activity) p.activity = { ...op.activity, since: w.cycle };
+    },
+  },
+  // Sentiments (relations asymétriques) : a ressent quelque chose pour b, pas forcément l'inverse.
+  feel: {
+    validate(w, op) {
+      if (!w.people[op.from] || !w.people[op.to]) return "sentiment entre personnages inconnus";
+      if (op.from === op.to) return "relation avec soi-même";
+      return null;
+    },
+    apply(w, op, ctx) {
+      ctx.feel?.(op.from, op.to, op.delta || 0, op.kind || null, op.note || null);
+    },
+  },
+  // Transmission d'une information : la source doit la connaître et les deux doivent être ensemble.
+  tell: {
+    validate(w, op) {
+      const f = w.facts[op.fact];
+      if (!f) return "fait inconnu";
+      if (!w.people[op.from] || !w.people[op.to]) return "personnage inconnu";
+      if (!f.public && !f.knownBy.includes(op.from)) return `${op.from} ne connaît pas cette information`;
+      if (op.room && (w.people[op.from].location !== op.room || w.people[op.to].location !== op.room)) return "les deux personnages ne sont pas dans la même pièce";
+      return null;
+    },
+    apply(w, op) {
+      learn(w, op.to, op.fact);
+      if (op.stance) believe(w, op.to, op.fact, op.stance);
+    },
+  },
+  object: {
+    validate(w, op) {
+      if (op.action === "create") return op.object?.id && !w.objects[op.object.id] && w.building.rooms?.[op.object.room] ? null : "objet invalide";
+      if (!w.objects?.[op.id]) return `objet inconnu (${op.id})`;
+      for (const key of Object.keys(op.set || {})) if (!OBJECT_FIELDS.has(key)) return `champ d'objet non modifiable (${key})`;
+      if (op.set?.room && !w.building.rooms?.[op.set.room]) return "pièce inconnue";
+      return null;
+    },
+    apply(w, op) {
+      if (op.action === "create") {
+        w.objects[op.object.id] = { state: "ok", history: [], ...op.object, createdCycle: w.cycle };
+        return;
+      }
+      const o = w.objects[op.id];
+      Object.assign(o, op.set || {});
+      if (op.note) {
+        o.history.push({ cycle: w.cycle, text: clampText(op.note, 140) });
+        if (o.history.length > 12) o.history.shift();
+      }
+    },
+  },
+  room: {
+    validate(w, op) {
+      if (op.action === "add") {
+        const r = op.room;
+        if (!r?.id || w.building.rooms[r.id] || !w.building.floors[r.floor]) return "pièce invalide ou déjà existante";
+        return null;
+      }
+      return w.building.rooms?.[op.id] ? null : `pièce inconnue (${op.id})`;
+    },
+    apply(w, op) {
+      if (op.action === "add") {
+        const r = { access: "public", log: [], discovered: true, kind: "special", ...op.room, exits: [`${op.room.floor}.palier`] };
+        w.building.rooms[r.id] = r;
+        w.building.floors[r.floor].rooms.push(r.id);
+        w.building.rooms[`${r.floor}.palier`]?.exits.push(r.id);
+        return;
+      }
+      Object.assign(w.building.rooms[op.id], op.set || {});
     },
   },
   relation: {
@@ -376,6 +468,9 @@ export function validateProposal(world, proposal) {
     ev.actors = (ev.actors || []).filter(Boolean);
     ev.causes = (ev.causes || []).filter(Boolean);
     for (const id of ev.actors) if (!world.people[id]) errors.push(`acteur inexistant (${id})`);
+    if (ev.room && !world.building.rooms?.[ev.room]) errors.push(`lieu inexistant (${ev.room})`);
+    // Une conséquence annoncée doit correspondre à un vrai changement d'état.
+    if (ev.importance >= 3 && !(proposal.ops || []).length && !proposal.decision && !proposal.observational) errors.push("conséquence annoncée sans changement de l'état du monde");
     // On ne s'appuie jamais sur un passé inventé : chaque cause doit être un événement enregistré.
     for (const id of ev.causes || []) if (!findEvent(world, id)) errors.push(`cause inexistante (${id})`);
     if (!proposal.allowRepeat) {
@@ -444,6 +539,9 @@ export function commit(world, proposal, ctx) {
 // Invariants vérifiés après chaque cycle (sinon le cycle est annulé).
 export function checkInvariants(world, expectedTotal) {
   const problems = [];
+  for (const p of Object.values(world.people)) {
+    if (p.location && world.building.rooms && !world.building.rooms[p.location]) problems.push(`localisation invalide (${p.id} → ${p.location})`);
+  }
   const total = totalMoney(world);
   if (total !== expectedTotal) problems.push(`masse monétaire incohérente (${total} ≠ ${expectedTotal})`);
   for (const a of Object.values(world.accounts)) {

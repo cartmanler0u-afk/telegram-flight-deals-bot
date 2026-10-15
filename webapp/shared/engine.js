@@ -972,10 +972,14 @@ export function publicResult(result) {
 // ---------------------------------------------------------------------------
 // Point d'entrée unique des actions (utilisé par l'API et le mode démo)
 
-export function applyAction(state, type, payload = {}, now = Date.now()) {
+export function applyAction(state, type, payload = {}, now = Date.now(), opts = {}) {
   if (type.startsWith("world.")) {
+    // Une autre instance du serveur simule ce monde (bail) : on ne le modifie pas ici.
+    if (opts.worldActive === false) throw new OfficeError("Le Bâtiment 0 est en cours de simulation sur une autre instance du serveur : réessaie dans un instant.");
     try {
-      return { public: applyWorldAction(state, type, payload, now) };
+      const result = applyWorldAction(state, type, payload, now, opts);
+      state.world.rev = (state.world.rev || 0) + 1;
+      return { public: result };
     } catch (err) {
       if (err instanceof WorldError) throw new OfficeError(err.message);
       throw err;
@@ -1034,7 +1038,7 @@ export function applyAction(state, type, payload = {}, now = Date.now()) {
 // ---------------------------------------------------------------------------
 // Horloge du QG : démarre/termine les missions, rappels, réunions planifiées.
 
-export function advance(state, now = Date.now()) {
+export function advance(state, now = Date.now(), { world: simulateWorld = true } = {}) {
   const notes = [];
   let changed = false;
 
@@ -1120,9 +1124,11 @@ export function advance(state, now = Date.now()) {
   }
 
   // Le Bâtiment 0 vit à son rythme (cycles de 30 min, rattrapage borné).
-  const world = advanceWorld(state, now);
-  if (world.changed) changed = true;
-  notes.push(...world.notes);
+  if (simulateWorld) {
+    const world = advanceWorld(state, now);
+    if (world.changed) changed = true;
+    notes.push(...world.notes);
+  }
 
   return { notes, changed };
 }

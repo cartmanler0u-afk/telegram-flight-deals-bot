@@ -12,7 +12,7 @@ import {
   pendingJobs,
 } from "./engine.js";
 import { createTemplateGenerator } from "./templates.js";
-import { worldJobPacket, attachWorldNarration, worldView, personSheet, buildReport } from "./world/index.js";
+import { worldJobPacket, attachWorldNarration, worldView, personSheet, buildReport, exploreQuery } from "./world/index.js";
 
 export class OfficeRuntime {
   constructor({
@@ -23,7 +23,13 @@ export class OfficeRuntime {
     onChange = () => {},
     onNotify = () => {},
     onError = (err) => console.error(err),
+    devTools = false,
+    worldActive = true,
   }) {
+    this.devTools = devTools;
+    // false quand une autre instance du serveur détient le bail du Bâtiment 0 :
+    // le QG continue de vivre, le monde reste consultable mais n'avance pas ici.
+    this.worldActive = worldActive;
     this.state = state;
     this.fallback = fallback;
     this.generator = generator || fallback;
@@ -35,7 +41,7 @@ export class OfficeRuntime {
   }
 
   dispatch(type, payload) {
-    const result = applyAction(this.state, type, payload || {}, this.now());
+    const result = applyAction(this.state, type, payload || {}, this.now(), { devTools: this.devTools, worldActive: this.worldActive });
     this.onChange();
     this.tick();
     return result;
@@ -50,7 +56,7 @@ export class OfficeRuntime {
   }
 
   tick() {
-    const { notes, changed } = advance(this.state, this.now());
+    const { notes, changed } = advance(this.state, this.now(), { world: this.worldActive });
     if (changed) this.onChange();
     if (notes.length) this.onNotify(notes);
     this.launchJobs();
@@ -58,6 +64,7 @@ export class OfficeRuntime {
 
   launchJobs() {
     for (const job of pendingJobs(this.state)) {
+      if (job.kind === "world" && !this.worldActive) continue;
       const key = `${job.kind}:${job.id}`;
       if (this.inflight.has(key)) continue;
       this.inflight.add(key);
@@ -126,6 +133,7 @@ export class OfficeRuntime {
     }
     // Lectures du Bâtiment 0 (servies à la demande : le monde complet n'est pas dans le polling).
     if (type === "world.view") return worldView(this.state.world, this.state);
+    if (type === "world.explore") return exploreQuery(this.state, payload, this.now());
     if (type === "world.person") return personSheet(this.state.world, this.state, String(payload.id || ""));
     if (type === "world.report") return buildReport(this.state.world, { since: this.state.world.report.lastSeenAt, until: this.now() });
     throw new Error(`Requête inconnue : ${type}`);

@@ -72,6 +72,7 @@ class RemoteBackend extends Emitter {
       this.rev = data.rev;
       this.ai = data.ai || this.ai;
       this.me = data.me || this.me;
+      this.devTools = !!data.devTools;
       this.emit();
       return true;
     }
@@ -162,6 +163,7 @@ class LocalBackend extends Emitter {
   constructor() {
     super();
     this.mode = "demo";
+    this.devTools = true; // démo locale : bac à sable, le mode test du chaos est disponible
     this.ai = { enabled: false, model: null };
     this.me = { id: "demo", name: tg?.initDataUnsafe?.user?.first_name || "Boss" };
   }
@@ -178,6 +180,7 @@ class LocalBackend extends Emitter {
     let saveTimer = null;
     let emitQueued = false;
     this.runtime = new OfficeRuntime({
+      devTools: true,
       state,
       generator: createTemplateGenerator({ latencyMs: 900 }),
       onChange: () => {

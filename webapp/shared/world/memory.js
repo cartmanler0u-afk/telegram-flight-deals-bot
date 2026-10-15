@@ -9,8 +9,12 @@
 // Un personnage ne « sait » que les faits où il figure dans knownBy (ou les faits publics).
 
 import { clampText, localParts, worldId } from "./core.js";
+import { logInRoom } from "./building.js";
 
-export const LIMITS = { events: 300, facts: 240, chronicleDays: 90, linesPerDay: 14, memories: 14, ledger: 250, appliedKeys: 1500 };
+// Au-delà de ce nombre de personnes informées, une rumeur est « de notoriété publique ».
+export const WIDESPREAD = 60;
+
+export const LIMITS = { events: 450, facts: 420, chronicleDays: 90, linesPerDay: 18, memories: 14, ledger: 300, appliedKeys: 2500, relations: 1800, metrics: 24 * 8 };
 
 // ------------------------------------------------------------------ faits
 
@@ -45,12 +49,29 @@ export function learn(world, personId, factId) {
   const fact = world.facts[factId];
   const person = world.people[personId];
   if (!fact || !person) return false;
-  if (!fact.knownBy.includes(personId)) fact.knownBy.push(personId);
+  if (!fact.public && !fact.knownBy.includes(personId)) {
+    fact.knownBy.push(personId);
+    if (fact.knownBy.length > WIDESPREAD && fact.status !== "secret") {
+      fact.public = true;
+      fact.widespread = world.cycle;
+    }
+  }
   if (!person.knows.includes(factId)) {
     person.knows.push(factId);
     if (person.knows.length > 60) person.knows.splice(0, person.knows.length - 60);
   }
   return true;
+}
+
+// Ce que le personnage pense d'une information : il y croit, il doute, ou il compte s'en servir.
+export function believe(world, personId, factId, stance) {
+  const person = world.people[personId];
+  if (!person) return;
+  if (!Array.isArray(person.beliefs)) person.beliefs = [];
+  const existing = person.beliefs.find((b) => b.fact === factId);
+  if (existing) Object.assign(existing, { stance, cycle: world.cycle });
+  else person.beliefs.push({ fact: factId, stance, cycle: world.cycle });
+  if (person.beliefs.length > 16) person.beliefs.shift();
 }
 
 export function publicize(world, factId) {
@@ -101,7 +122,7 @@ export function spreadRumors(world, rng, friendsOf) {
 
 // ------------------------------------------------------------------ événements
 
-export function recordEvent(world, { kind, title, text, actors = [], causes = [], importance = 2, rare = false, plotId = null, facts = [], public: isPublic = true, tags = [], key = null }, now) {
+export function recordEvent(world, { kind, title, text, actors = [], causes = [], importance = 2, rare = false, plotId = null, facts = [], public: isPublic = true, tags = [], key = null, room = null, source = "natural", dialogue = null, tier = null }, now) {
   const event = {
     id: worldId(world, "ev"),
     cycle: world.cycle,
@@ -119,12 +140,23 @@ export function recordEvent(world, { kind, title, text, actors = [], causes = []
     tags,
     key,
   };
+  // Où ça s'est passé : la pièce explicite, sinon celle du premier acteur.
+  const where = room || world.people[event.actors[0]]?.location || null;
+  if (where && world.building.rooms?.[where]) event.room = where;
+  if (source !== "natural") event.source = source;
+  if (tier) event.tier = tier;
+  if (dialogue?.length) event.dialogue = dialogue.slice(0, 6).map((l) => ({ who: l.who, line: clampText(l.line, 220) }));
   world.events.push(event);
+  if (event.room) logInRoom(world, event.room, event);
   for (const id of event.actors) {
     const person = world.people[id];
     if (!person) continue;
     person.lastSeenCycle = world.cycle;
     person.mentions = (person.mentions || 0) + 1;
+    // Dernières actions (consultables sur la fiche, même quand le journal global est compacté).
+    person.recent ||= [];
+    person.recent.push({ cycle: world.cycle, text: clampText(event.title, 80), id: event.id });
+    if (person.recent.length > 5) person.recent.shift();
     if (importance >= 3) {
       person.memories.push(event.id);
       if (person.memories.length > LIMITS.memories) person.memories.shift();
@@ -180,6 +212,13 @@ export function compact(world) {
   if (world.ledger.length > LIMITS.ledger) world.ledger.splice(0, world.ledger.length - LIMITS.ledger);
   // Les clés de dédoublonnage très anciennes sont oubliées (l'état lui-même protège contre
   // une seconde application : entreprise déjà en faillite, indice déjà trouvé, loi déjà votée…).
+  // Les relations les plus tièdes s'effacent quand il y en a trop (les fortes restent).
+  const rels = Object.entries(world.relations || {});
+  if (rels.length > LIMITS.relations) {
+    rels.sort((a, b) => Math.abs(a[1].ab ?? a[1].score) + Math.abs(a[1].ba ?? a[1].score) - (Math.abs(b[1].ab ?? b[1].score) + Math.abs(b[1].ba ?? b[1].score)));
+    for (const [key] of rels.slice(0, rels.length - LIMITS.relations)) delete world.relations[key];
+  }
+  if ((world.metrics || []).length > LIMITS.metrics) world.metrics.splice(0, world.metrics.length - LIMITS.metrics);
   const keys = Object.keys(world.applied);
   if (keys.length > LIMITS.appliedKeys) for (const k of keys) if (world.cycle - world.applied[k] > 30 * 48) delete world.applied[k];
 

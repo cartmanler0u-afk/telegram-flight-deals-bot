@@ -6,8 +6,9 @@
 
 import { Markup } from "telegraf";
 import { esc, credits } from "../../webapp/shared/world/core.js";
-import { worldView, personSheet, buildReport } from "../../webapp/shared/world/index.js";
+import { buildReport } from "../../webapp/shared/world/index.js";
 import { clip } from "../../webapp/shared/world/report.js";
+import { screenFor, testScreen } from "./explorer.js";
 
 const MAX = 3900;
 const HTML = { parse_mode: "HTML", link_preview_options: { is_disabled: true } };
@@ -226,21 +227,8 @@ function findMystery(world, query) {
 
 // ------------------------------------------------------------------ enregistrement des commandes
 
-const VIEWS = {
-  news: renderNews,
-  floors: renderFloors,
-  agents: renderAgents,
-  orgs: renderOrgs,
-  economy: renderEconomy,
-  mysteries: renderMysteries,
-  rumors: renderRumors,
-  anomalies: renderAnomalies,
-  laws: renderLaws,
-  plots: renderPlots,
-  history: renderHistory,
-};
 
-export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
+export function registerBuilding(bot, { service, isAdmin, aiCap = 0, devTools = false }) {
   const officeOf = async (ctx) => {
     if (!isAdmin(ctx)) {
       await ctx.reply("⛔ Le Bâtiment est réservé aux administrateurs du bot.");
@@ -248,29 +236,36 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
     }
     return service.get(String(ctx.from.id), { bossName: ctx.from.first_name });
   };
-  const view = (office) => worldView(office.runtime.state.world, office.runtime.state);
   const args = (ctx) => (ctx.message?.text || "").split(/\s+/).slice(1).join(" ").trim();
+  const dev = (ctx) => devTools && isAdmin(ctx);
+  const show = async (ctx, office, route, { edit = false, notice = null } = {}) => {
+    const sc = screenFor(office.runtime.state, route, Date.now(), { dev: dev(ctx) });
+    const text = notice ? `${notice}\n\n${sc.text}` : sc.text;
+    if (edit) {
+      try {
+        return await ctx.editMessageText(text, { ...HTML, ...sc.keyboard });
+      } catch (err) {
+        if (/not modified/i.test(err?.description || err?.message || "")) return null;
+      }
+    }
+    return ctx.reply(text, { ...HTML, ...sc.keyboard });
+  };
 
-  bot.command(["building", "batiment", "madhouse"], async (ctx) => {
-    const office = await officeOf(ctx);
-    if (office) await ctx.reply(renderBuilding(view(office)), { ...HTML, ...MENU });
-  });
-
-  const simple = { news: "news", floors: "floors", agents: "agents", organizations: "orgs", economy: "economy", rumors: "rumors", anomalies: "anomalies", history: "history", laws: "laws", plots: "plots", mysteries: "mysteries" };
-  for (const [command, key] of Object.entries(simple)) {
+  // Écran principal et commandes directes vers chaque écran de l'explorateur.
+  const direct = { building: "menu", batiment: "menu", madhouse: "menu", explore: "b", floors: "b", agents: "d:0", news: "n:0", mysteries: "i", rumors: "i", plots: "i", organizations: "pol", laws: "pol", economy: "e", anomalies: "a", history: "h", control: "c" };
+  for (const [command, route] of Object.entries(direct)) {
     bot.command(command, async (ctx) => {
       const office = await officeOf(ctx);
-      if (office) await ctx.reply(VIEWS[key](view(office)), HTML);
+      if (office) await show(ctx, office, route);
     });
   }
 
   bot.command("agent", async (ctx) => {
     const office = await officeOf(ctx);
     if (!office) return;
-    const world = office.runtime.state.world;
-    const person = findPerson(world, args(ctx));
+    const person = findPerson(office.runtime.state.world, args(ctx));
     if (!person) return ctx.reply("Usage : /agent &lt;nom&gt; (ex. /agent Arlette)", HTML);
-    await ctx.reply(renderSheet(personSheet(world, office.runtime.state, person.id)), HTML);
+    await show(ctx, office, `p:${person.id}`);
   });
 
   const sendReport = async (ctx, office) => {
@@ -289,11 +284,7 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
     if (!office) return;
     const world = office.runtime.state.world;
     const text = args(ctx);
-    if (!text) {
-      const open = Object.values(world.mysteries).filter((m) => m.status === "open");
-      if (!open.length) return ctx.reply("Aucun mystère ouvert. Le Bâtiment se tait… pour l'instant.");
-      return ctx.reply("<b>🔍 Quel mystère veux-tu faire avancer ?</b>", { ...HTML, ...Markup.inlineKeyboard(open.slice(0, 6).map((m) => [Markup.button.callback(m.title.slice(0, 40), `mh:mys:${m.id}`)])) });
-    }
+    if (!text) return show(ctx, office, "i");
     // /investigate <mystère> | <personne>
     const [mq, pq] = text.split("|").map((s) => s.trim());
     const m = findMystery(world, mq);
@@ -324,17 +315,24 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
     else if (key === "importance") payload.minImportance = a;
     else if (key === "quiet") Object.assign(payload, { quietStart: a, quietEnd: b });
     else if (key === "report") Object.assign(payload, { reportHour: a, dailyReport: b !== "off" });
+    else if (key === "chaos") payload.chaos = a;
+    else if (key === "population") payload.population = a;
+    else if (key === "events") payload.maxEventsPerCycle = a;
+    else if (key === "speed") payload.timeScale = a;
+    else if (key === "rare") Object.assign(payload, { rarity_rare: a, rarity_very_rare: a, rarity_legendary: a });
+    else if (key === "dialogue") payload.dialogue = a;
     try {
       const res = Object.keys(payload).length ? office.runtime.dispatch("world.config", payload).public : { config: office.runtime.state.world.config };
       const c = res.config;
       await ctx.reply(
         [
           "<b>⚙️ Réglages du Bâtiment</b>",
-          `Cycle : ${c.cycleMinutes} min · rattrapage max ${c.maxCatchUp} cycles · ${c.paused ? "⏸️ en pause" : "▶️ en marche"}`,
+          `Population : ${c.population} · chaos : ${c.chaos}/100 · événements max/cycle : ${c.maxEventsPerCycle} · rareté (rare/très rare/légendaire) : ×${c.rarity.rare}/×${c.rarity.very_rare}/×${c.rarity.legendary} · dialogues : ${c.dialogue}`,
+          `Cycle : ${c.cycleMinutes} min de temps simulé · vitesse du temps ×${c.timeScale} · rattrapage max ${c.maxCatchUp} cycles · ${c.paused ? "⏸️ en pause" : "▶️ en marche"}`,
           `IA narrative : ${c.ai.enabled && c.ai.available ? "activée" : "désactivée"} · ${c.ai.dailyCalls} appel(s)/jour max (plafond opérateur : ${aiCap})`,
           `Notifications : importance ≥ ${c.notify.minImportance}, ${c.notify.maxPerDay}/jour max, ${c.notify.minGapMinutes} min d'écart, silence ${c.notify.quietStart}h–${c.notify.quietEnd}h · rapport quotidien ${c.notify.dailyReport ? `à ${c.notify.reportHour}h` : "désactivé"}`,
           "",
-          "<i>/madhouse_config cycle 30 · pause · resume · ai on|off · ai_calls 5 · notif 2 · importance 4 · quiet 23 8 · report 9 on|off</i>",
+          "<i>/madhouse_config chaos 70 · population 300 · events 6 · rare 2 · speed 2 · dialogue riche · cycle 30 · pause · resume · ai on|off · ai_calls 5 · notif 2 · importance 4 · quiet 23 8 · report 9 on|off</i>",
         ].join("\n"),
         HTML
       );
@@ -343,23 +341,79 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
     }
   });
 
+  // Navigation + interventions de l'explorateur.
+  bot.action(/^mx:(.+)$/, async (ctx) => {
+    const office = await officeOf(ctx);
+    if (!office) return ctx.answerCbQuery();
+    const [kind, a, b] = ctx.match[1].split(":");
+    const run = (type, payload) => office.runtime.dispatch(type, payload).public;
+    try {
+      if (kind === "fo" || kind === "uf") {
+        const res = run(kind === "fo" ? "world.follow" : "world.unfollow", { personId: a });
+        await ctx.answerCbQuery(res.title);
+        return show(ctx, office, `p:${a}`, { edit: true });
+      }
+      if (kind === "pr") {
+        const res = run("world.promote", { personId: a });
+        await ctx.answerCbQuery("Promotion enregistrée");
+        return show(ctx, office, `p:${a}`, { edit: true, notice: `🎖️ ${esc(res.title)}` });
+      }
+      if (kind === "og") {
+        const res = run("world.organize", { roomId: a, kind: "fete" });
+        await ctx.answerCbQuery("Invitations envoyées");
+        return show(ctx, office, `r:${a}:0`, { edit: true, notice: `🎉 ${esc(res.title)}` });
+      }
+      if (kind === "ir") {
+        const res = run("world.investigateRumor", { factId: a });
+        await ctx.answerCbQuery("Enquête commandée");
+        return show(ctx, office, "i", { edit: true, notice: `🕵️ ${esc(res.title)}` });
+      }
+      if (kind === "fd") {
+        const res = run("world.fund", { companyId: a, amount: 500 });
+        await ctx.answerCbQuery("Financement envoyé");
+        return show(ctx, office, "e", { edit: true, notice: `💸 ${esc(res.title)}` });
+      }
+      if (kind === "plc") {
+        const res = run("world.proposeLaw", { code: a });
+        await ctx.answerCbQuery("Texte déposé");
+        return show(ctx, office, "pol", { edit: true, notice: `📜 ${esc(res.title)}` });
+      }
+      if (kind === "rep") {
+        await ctx.answerCbQuery();
+        return sendReport(ctx, office);
+      }
+      if (["tc", "tk", "te", "ta"].includes(kind)) {
+        if (!dev(ctx)) return ctx.answerCbQuery("Mode test réservé (WORLD_DEV_TOOLS + administrateur).", { show_alert: true });
+        let summary;
+        if (kind === "tc") {
+          const res = run("world.debug.cycles", { n: Number(a) || 1 });
+          summary = `⏱️ ${res.cycles} cycle(s) simulé(s) : ${res.events.length} événement(s).${res.problems.length ? ` ⚠️ ${res.problems.length} problème(s).` : " ✔️ Invariants OK."}\n${res.events.slice(-6).map((e) => `• ${esc(e.title)}`).join("\n")}`;
+        } else if (kind === "tk") {
+          const res = run("world.debug.check", {});
+          summary = res.problems.length ? `⚠️ ${res.problems.length} problème(s) :\n${res.problems.slice(0, 8).map((p) => `• ${esc(p)}`).join("\n")}` : "✔️ Aucune incohérence détectée.";
+        } else if (kind === "te") summary = `⚡ ${esc(run("world.debug.event", { template: a }).title)}`;
+        else summary = `🧵 Arc démarré : ${esc(run("world.debug.arc", { kind: a }).title)}`;
+        await ctx.answerCbQuery("Fait");
+        const sc = testScreen(office.runtime.state, summary);
+        return ctx.editMessageText(sc.text, { ...HTML, ...sc.keyboard }).catch(() => ctx.reply(sc.text, { ...HTML, ...sc.keyboard }));
+      }
+      await ctx.answerCbQuery();
+      return show(ctx, office, [kind, a, b].filter((x) => x !== undefined).join(":"), { edit: true });
+    } catch (err) {
+      return ctx.answerCbQuery(String(err.message || "Action impossible").slice(0, 190), { show_alert: true });
+    }
+  });
+
+  // Anciennes actions (boutons des notifications : décisions, mystères).
   bot.action(/^mh:(\w+)(?::([\w-]+))?(?::([\w-]+))?$/, async (ctx) => {
     const office = await officeOf(ctx);
     if (!office) return ctx.answerCbQuery();
     const [, kind, a, b] = ctx.match;
     const world = office.runtime.state.world;
     try {
-      if (VIEWS[kind]) {
-        await ctx.answerCbQuery();
-        return ctx.reply(VIEWS[kind](view(office)), HTML);
-      }
       if (kind === "report") {
         await ctx.answerCbQuery();
         return sendReport(ctx, office);
-      }
-      if (kind === "agent") {
-        await ctx.answerCbQuery();
-        return ctx.reply(renderSheet(personSheet(world, office.runtime.state, a)), HTML);
       }
       if (kind === "dec") {
         const res = office.runtime.dispatch("world.decide", { decisionId: a, choice: b });
@@ -377,7 +431,8 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0 }) {
         await ctx.answerCbQuery("Enquêteur mandaté");
         return ctx.reply(`🔍 ${esc(res.public.title)}`, HTML);
       }
-      return ctx.answerCbQuery();
+      await ctx.answerCbQuery();
+      return show(ctx, office, "menu");
     } catch (err) {
       return ctx.answerCbQuery(String(err.message || "Action impossible").slice(0, 190), { show_alert: true });
     }

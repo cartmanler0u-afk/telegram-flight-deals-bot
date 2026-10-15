@@ -25,11 +25,14 @@ function doneTasks(state) {
 
 export function economyCycle(cx) {
   const { world } = cx;
+  if (cx.hour >= 9 && cx.once("subsidies")) subsidies(cx);
   if (cx.hour >= 9 && cx.once("payroll")) payroll(cx);
-  if (cx.hour >= 12 && cx.once("lunch")) lunch(cx);
+  if (cx.hour >= 11 && cx.hour < 16) lunchSales(cx);
+  if (cx.hour >= 15 && cx.once("startups")) startupSales(cx);
   if (cx.hour >= 14 && cx.once("phantom")) phantomForward(cx);
   if (cx.hour >= 18 && cx.once("closing")) closing(cx);
-  if (cx.weekday === 1 && cx.hour >= 8 && cx.once("monetary")) monetaryPolicy(cx);
+  if (cx.hour >= 22 && cx.once("hotelrent")) hotelRent(cx);
+  if (cx.hour >= 8 && cx.once("monetary")) monetaryPolicy(cx);
   bossCorpContracts(cx);
   return world;
 }
@@ -80,32 +83,72 @@ function payroll(cx) {
   }
 }
 
-function lunch(cx) {
-  const { world, rng } = cx;
-  const idx = priceIndex(world);
-  const strikeAt = world.flags?.strike;
-  const ops = { refectoire: [], biscuiterie: [] };
-  for (const p of Object.values(world.people)) {
-    if (p.kind === "animal" || !["active", "fired", "admin_dead", "double"].includes(p.status)) continue;
-    const acct = accountOf("p", p.id);
-    const options = FOOD.map((id) => world.companies[id]).filter((c) => c?.status === "active" && !(strikeAt && c.id === "refectoire"));
-    if (!options.length) continue;
-    const pick = rng.weighted(options.map((c) => {
-      let w = c.demand * (c.reputation / 50);
-      if (c.id === "refectoire" && cx.hasLaw("cheese_ban")) w *= 0.45;
-      if (c.id === "biscuiterie" && cx.hasLaw("cheese_ban")) w *= 1.6;
-      const rel = cx.relation(p.id, c.ceo);
-      if (rel?.kind === "rival") w *= 0.3;
-      w /= Math.max(1, c.price * idx) / 10;
-      return [c, w];
-    }));
-    if (!pick) continue;
-    const price = Math.max(1, Math.round(pick.price * idx));
-    if (balance(world, acct) < price || world.accounts[acct].frozen) continue;
-    ops[pick.id].push({ op: "transfer", from: acct, to: accountOf("c", pick.id), amount: price, reason: `Déjeuner (${pick.product})` });
-  }
-  for (const list of Object.values(ops)) if (list.length) cx.commit({ source: "system", kind: "lunch", ops: list });
+// Les ventes du déjeuner suivent la localisation réelle : on paie là où l'on mange.
+const FOOD_COMPANY = { "f0.cafeteria": "refectoire", "f3.biscuiterie": "biscuiterie" };
 
+function lunchSales(cx) {
+  const { world } = cx;
+  if (world.flags?.strike) return;
+  const idx = Math.sqrt(priceIndex(world));
+  const ops = [];
+  for (const p of Object.values(world.people)) {
+    const companyId = FOOD_COMPANY[p.location];
+    if (!companyId || p.kind === "animal" || p.flags?.ate === cx.dayKey || p.employer === companyId) continue;
+    const c = world.companies[companyId];
+    if (c?.status !== "active") continue;
+    const price = Math.max(1, Math.round(c.price * idx));
+    const acct = accountOf("p", p.id);
+    p.flags = { ...p.flags, ate: cx.dayKey };
+    if (balance(world, acct) - ops.filter((o) => o.from === acct).reduce((s, o) => s + o.amount, 0) < price || world.accounts[acct]?.frozen) continue;
+    ops.push({ op: "transfer", from: acct, to: accountOf("c", companyId), amount: price, reason: `Déjeuner (${c.product})` });
+  }
+  if (ops.length) cx.commit({ source: "system", kind: "lunch", ops });
+}
+
+// Le Syndic finance les services qu'il emploie de fait (médias, labos, banque) : un contrat
+// couvrant les trois quarts de leur masse salariale. Le reste dépend de leurs recettes.
+function subsidies(cx) {
+  const { world } = cx;
+  const ops = [];
+  for (const c of Object.values(world.companies)) {
+    if (c.status !== "active" || !["media", "research"].includes(c.kind)) continue;
+    const payrollTotal = Object.values(world.people).filter((p) => p.employer === c.id && p.status === "active").reduce((s, p) => s + (p.salary || 0), 0);
+    const amount = Math.round(payrollTotal * 0.75);
+    if (amount > 0) ops.push({ op: "transfer", from: "treasury", to: accountOf("c", c.id), amount, reason: `Contrat de service du Syndic (${c.name})` });
+  }
+  if (ops.length) cx.commit({ source: "system", kind: "subsidies", flexible: true, ops });
+}
+
+// Loyer des chambres de l'Hôtel : ceux qui ne paient plus finissent à la buanderie.
+function hotelRent(cx) {
+  const { world } = cx;
+  const ops = [];
+  const evicted = [];
+  for (const p of Object.values(world.people)) {
+    if (p.kind === "animal" || !["f8.aileA", "f8.aileB", "f8.aileC"].includes(p.homeRoom) || ["gone", "missing"].includes(p.status)) continue;
+    const acct = accountOf("p", p.id);
+    if (balance(world, acct) >= 8 && !world.accounts[acct]?.frozen) {
+      ops.push({ op: "transfer", from: acct, to: "treasury", amount: 8, reason: "Loyer de la chambre (Hôtel des Employés)" });
+      if (p.flags?.rentMissed) p.flags = { ...p.flags, rentMissed: 0 };
+    } else {
+      p.flags = { ...p.flags, rentMissed: (p.flags?.rentMissed || 0) + 1 };
+      if (p.flags.rentMissed >= 3) evicted.push(p);
+    }
+  }
+  if (ops.length) cx.commit({ source: "system", kind: "rent", ops });
+  for (const p of evicted.slice(0, 3)) {
+    cx.commit({
+      source: "system",
+      kind: "eviction",
+      key: `evict:${p.id}:${cx.dayKey}`,
+      ops: [{ op: "person", id: p.id, set: { homeRoom: "f8.buanderie" }, reputation: -3 }],
+      event: { kind: "eviction", title: `${p.name} dort désormais à la buanderie`, text: `Trois loyers impayés : la gouvernante a déposé les affaires de ${p.name} entre deux machines à laver. Les chaussettes orphelines l'accueillent chaleureusement.`, actors: [p.id, "s-oreiller"].filter((id) => world.people[id]), room: "f8.buanderie", importance: 3, tags: ["économie", "logement"] },
+    });
+  }
+}
+
+function startupSales(cx) {
+  const { world, rng } = cx;
   // Produits des start-up : quelques occupants achètent, selon le bouche-à-oreille.
   for (const c of Object.values(world.companies)) {
     if (c.kind !== "startup" || c.status !== "active") continue;
@@ -292,8 +335,8 @@ export function bankrupt(cx, company) {
 
 function monetaryPolicy(cx) {
   const { world } = cx;
-  if (balance(world, "treasury") >= 15000) return;
-  const amount = 12000;
+  if (balance(world, "treasury") >= 30000) return;
+  const amount = 40000;
   cx.commit({
     source: "system",
     kind: "mint",

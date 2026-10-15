@@ -52,6 +52,7 @@ export function createOfficeApp({ service, botToken, allowedUserIds = [], ai = {
     ai,
     me: req.me,
     mode: "telegram",
+    devTools: !!req.office.runtime.devTools,
   });
 
   api.get("/state", (req, res) => {

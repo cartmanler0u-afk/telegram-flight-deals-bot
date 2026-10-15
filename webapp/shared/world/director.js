@@ -9,6 +9,7 @@
 // s'endorment, se réveillent, fusionnent, se résolvent ou échouent.
 
 import { credits, worldId } from "./core.js";
+import { PARLIAMENT_FLOOR } from "./building.js";
 import { accountOf, balance } from "./ops.js";
 import { hasLaw, lawFollowup, canReachFloor } from "./politics.js";
 import { sharePrice, ownerPerson, ownerName } from "./economy.js";
@@ -221,9 +222,10 @@ const SCHEDULED = {
   },
   floor_vote: (cx, payload) => {
     const { world, rng } = cx;
+    if (payload.room) return roomVote(cx, payload);
     const floor = world.building.floors[payload.floor];
     if (!floor || floor.onPlan) return;
-    const deputies = world.parliament.seats.map((id) => world.people[id]).filter((d) => d && canReachFloor(world, d, "f4"));
+    const deputies = world.parliament.seats.map((id) => world.people[id]).filter((d) => d && canReachFloor(world, d, PARLIAMENT_FLOOR));
     let yes = 0;
     for (const d of deputies) if ((d.ambition?.kind === "truth" ? 2 : 0) + (d.traits.includes("zealous") ? -1 : 0) + rng.next() * 2 - 1 > 0) yes += 1;
     const register = yes > deputies.length / 2;
@@ -235,6 +237,78 @@ const SCHEDULED = {
       event: { kind: "floor_vote", title: register ? `${floor.name} entre au Plan Officiel` : `${floor.name} est scellé par l'Hémicycle`, text: register ? `${yes} député(s) sur ${deputies.length} votent son inscription. Il existe désormais légalement : les lois s'y appliquent (Charte, R4).` : `L'Hémicycle refuse son inscription (${yes} pour). L'accès est scellé… officiellement.`, actors: deputies.map((d) => d.id).slice(0, 4), importance: 4, tags: ["bâtiment", "politique"] },
     });
   },
+  ghost_close: (cx) => ghostClose(cx),
+  gathering_end: (cx, payload) => {
+    const { world, rng } = cx;
+    const guests = (payload.guests || []).map((id) => world.people[id]).filter((p) => p && p.location === payload.room);
+    if (guests.length < 2) return;
+    const pairs = Math.min(6, Math.floor(guests.length / 2));
+    const ops = [];
+    for (let i = 0; i < pairs; i++) {
+      const [a, b] = rng.shuffle(guests);
+      ops.push({ op: "feel", from: a.id, to: b.id, delta: rng.int(4, 12) }, { op: "feel", from: b.id, to: a.id, delta: rng.int(2, 10) });
+    }
+    const incident = rng.chance(0.3) ? rng.pick(guests) : null;
+    if (incident) ops.push({ op: "person", id: incident.id, reputation: -2 });
+    cx.commit({ source: "system", kind: "gathering_end", ops: [...ops, { op: "building", mood: 2 }], event: { kind: "gathering_end", title: `Fin de ${payload.label} : ${guests.length} participant(s) encore debout`, text: `${incident ? `${incident.name} a renversé le buffet sur un député. ` : ""}Des liens se sont créés, d'autres se sont tendus. Le ménage est prévu pour demain, peut-être.`, actors: guests.slice(0, 4).map((p) => p.id), room: payload.room, importance: 2, tags: ["fête", "vie sociale"] } });
+  },
+  rumor_verdict: (cx, payload) => {
+    const { world, rng } = cx;
+    const fact = world.facts[payload.fact];
+    const inv = world.people[payload.by];
+    if (!fact || !inv) return;
+    const skill = (inv.skills?.investigation || 5) / 10;
+    let verdict = fact.truth === null ? "invérifiable" : rng.chance(0.4 + skill * 0.5) ? (fact.truth ? "fondée" : "infondée") : fact.truth ? "infondée" : "fondée";
+    if (fact.truth !== null && rng.chance(0.1)) verdict = "invérifiable";
+    fact.investigation = { ...(fact.investigation || {}), verdict, cycle: world.cycle };
+    const about = fact.about.map((id) => world.people[id]).filter(Boolean);
+    cx.commit({
+      source: "system",
+      kind: "rumor_verdict",
+      ops: [{ op: "person", id: inv.id, reputation: 2 }, ...about.slice(0, 2).map((p) => ({ op: "person", id: p.id, reputation: verdict === "fondée" ? -6 : verdict === "infondée" ? 4 : 0 }))],
+      event: { kind: "rumor_verdict", title: `Enquête du propriétaire : la rumeur est jugée ${verdict}`, text: `« ${fact.text} » — selon ${inv.name}, elle est ${verdict}.${verdict === "invérifiable" ? " Les preuves manquent ; la rumeur, elle, continue." : " Le verdict peut se tromper : un enquêteur n'est qu'un enquêteur."}`, actors: [inv.id, ...about.slice(0, 2).map((p) => p.id)], room: "f9.enquetes", importance: 3, tags: ["enquête", "rumeur"] },
+      facts: [{ text: `Enquête : la rumeur « ${fact.text.slice(0, 120)} » a été jugée ${verdict} par ${inv.name}.`, about: about.map((p) => p.id), public: true }],
+    });
+  },
+  coffee_repair: (cx) => {
+    const machine = cx.world.objects["o-cafe"];
+    if (!machine || machine.state !== "en panne") return;
+    const tech = Object.values(cx.world.people).find((p) => p.dept === "technique" && p.status === "active");
+    cx.commit({ source: "system", kind: "repair", ops: [{ op: "object", id: machine.id, set: { state: "ok" }, note: `Réparé${tech ? ` par ${tech.name}` : ""}.` }], event: { kind: "repair", title: "Le distributeur de café est réparé", text: `${tech ? `${tech.name} a tapé deux fois dessus` : "Il s'est réparé tout seul"}. Il fonctionne. Pour l'instant.`, actors: [tech?.id].filter(Boolean), room: "f0.cafeteria", importance: 1, tags: ["café"] } });
+  },
+  floor_reopen: (cx, payload) => {
+    const floor = cx.world.building.floors[payload.floor];
+    if (!floor || floor.status !== "closed") return;
+    cx.commit({ source: "system", kind: "floor_reopen", ops: [{ op: "floor", id: floor.id, set: { status: "open", note: null } }], event: { kind: "floor_reopen", title: `${floor.name} rouvre`, text: "Les portes reconnaissent à nouveau les badges. Personne ne sait vraiment ce qui s'est passé à l'intérieur ; ceux qui y étaient non plus.", actors: [], room: `${floor.id}.palier`, importance: 3, tags: ["bâtiment"] } });
+  },
+  party_aftermath: (cx, payload) => {
+    const { world, rng } = cx;
+    const host = world.people[payload.host];
+    if (!host) return;
+    const complainer = world.people["s-oreiller"] || world.people["s-rodrigue"];
+    const great = rng.chance(0.5);
+    host.flags = { ...host.flags, parties: (host.flags.parties || 0) + 1 };
+    const warned = host.flags.parties >= 2 && !great;
+    cx.commit({
+      source: "system",
+      kind: "party_aftermath",
+      ops: [{ op: "person", id: host.id, reputation: great ? 5 : -4, career: warned ? "Avertissement RH pour fêtes non autorisées" : undefined }, ...(complainer && !great ? [{ op: "feel", from: complainer.id, to: host.id, delta: -15, note: "Ses fêtes empêchent l'étage de dormir." }] : []), { op: "building", mood: great ? 3 : -1 }],
+      event: { kind: "party_aftermath", title: great ? `La ${payload.theme} restera dans les annales` : `Lendemain de fête difficile : plainte contre ${host.name}`, text: great ? `On en parle à la machine à café. ${host.name} gagne des fans, et trois invitations au Club.` : `${complainer?.name || "La sécurité"} dépose une plainte pour tapage. ${warned ? "Les RH envoient un avertissement officiel, en recommandé, à l'étage d'en dessous." : ""}`, actors: [host.id, complainer?.id].filter(Boolean), room: payload.room, importance: warned ? 3 : 2, tags: ["fête", "vie sociale"] },
+    });
+  },
+  viral_aftermath: (cx, payload) => {
+    const { world, rng } = cx;
+    const p = world.people[payload.victim];
+    if (!p || p.status !== "active") return;
+    const embrace = p.traits?.includes("showoff") || p.traits?.includes("opportunist") || rng.chance(0.35);
+    cx.commit({
+      source: "agent",
+      kind: "viral_aftermath",
+      ops: embrace ? [{ op: "person", id: p.id, set: { title: `${p.title} & influenceur·se interne` }, career: "Transforme sa vidéo virale en carrière d'influence", reputation: 6 }] : [{ op: "person", id: p.id, reputation: -2 }, { op: "feel", from: p.id, to: "s-jordy", delta: -20, note: "La vidéo." }],
+      event: { kind: "viral_aftermath", title: embrace ? `${p.name} transforme sa honte en carrière : il lance sa chaîne interne` : `${p.name} exige le retrait de la vidéo`, text: embrace ? "Première vidéo : « Réaction à ma propre vidéo ». 300 vues. Jordy Lumière parle de « concurrence déloyale »." : "La vidéo est retirée. Elle circule désormais en version « remix karaoké ».", actors: [p.id, "s-jordy"].filter((id) => world.people[id]), importance: 3, tags: ["médias", "célébrité"] },
+    });
+  },
+  return_missing: (cx, payload) => returnMissing(cx, payload),
   strike_end: (cx, payload) => {
     const { world } = cx;
     if (!world.flags.strike || world.flags.strike.since !== payload.since) return;
@@ -243,6 +317,59 @@ const SCHEDULED = {
   },
   promise: (cx, payload) => keepOrBreakPromise(cx, payload),
 };
+
+// Vote sur l'existence légale d'une pièce apparue hors du Plan (couloir impossible).
+function roomVote(cx, payload) {
+  const { world, rng } = cx;
+  const room = world.building.rooms[payload.room];
+  if (!room || room.onPlan !== false) return;
+  const deputies = world.parliament.seats.map((id) => world.people[id]).filter((d) => d && canReachFloor(world, d, PARLIAMENT_FLOOR));
+  let yes = 0;
+  for (const d of deputies) if ((d.ambition?.kind === "truth" ? 2 : 0) + rng.next() * 2 - 1 > 0) yes += 1;
+  const register = yes > deputies.length / 2;
+  cx.commit({
+    source: "system",
+    kind: "floor_vote",
+    key: `roomvote:${room.id}`,
+    ops: [{ op: "room", id: room.id, set: register ? { onPlan: true } : { onPlan: false, access: "hidden", discovered: false } }],
+    event: { kind: "floor_vote", title: register ? `${room.name} entre au Plan Officiel` : `${room.name} est rayé du Plan… et de la carte`, text: register ? `${yes} député(s) sur ${deputies.length} votent son inscription : la pièce existe désormais légalement.` : `L'Hémicycle refuse son existence (${yes} pour). La porte est murée. Officiellement.`, actors: deputies.map((d) => d.id).slice(0, 4), room: room.id, importance: 3, tags: ["bâtiment", "politique"] },
+  });
+}
+
+// L'Étage fantôme se referme : ceux qui y sont restés « disparaissent » pour quelques cycles.
+function ghostClose(cx) {
+  const { world, rng } = cx;
+  const stuck = Object.values(world.people).filter((p) => p.location?.startsWith("f10.") && !["gone", "missing"].includes(p.status));
+  world.flags.ghostOpenUntil = 0;
+  for (const p of stuck) {
+    const back = world.cycle + rng.int(4, 18);
+    cx.commit({
+      source: "system",
+      kind: "disappearance",
+      key: `vanish:${p.id}:${world.cycle}`,
+      ops: [{ op: "person", id: p.id, set: { status: "missing", flags: { ...p.flags, missingSince: world.cycle, missingFrom: p.location } } }, { op: "schedule", dueCycle: back, kind: "return_missing", payload: { id: p.id } }],
+      event: { kind: "disappearance", title: `${p.name} a disparu`, text: `L'Étage fantôme s'est refermé alors que ${p.name} s'y trouvait encore. Son badge ne répond plus. Sa plante, elle, a l'air au courant.`, actors: [p.id], room: p.location, importance: 4, rare: true, tags: ["anomalie", "disparition", "étage fantôme"] },
+      facts: [{ text: `${p.name} a disparu lors de la fermeture de l'Étage fantôme.`, about: [p.id], public: true }],
+    });
+  }
+  return stuck.length;
+}
+
+function returnMissing(cx, { id }) {
+  const { world, rng } = cx;
+  const p = world.people[id];
+  if (!p || p.status !== "missing") return;
+  const excuse = rng.pick(["une réunion qui a duré plus longtemps que prévu", "un stage de développement personnel « très immersif »", "une erreur de l'Ascenseur B, qui s'est excusé", "un rendez-vous chez le dentiste, au 10e", "un congé que le Registre aurait dû enregistrer"]);
+  const memory = rng.chance(0.5);
+  cx.commit({
+    source: "system",
+    kind: "reappearance",
+    key: `return:${id}:${world.cycle}`,
+    ops: [{ op: "person", id, set: { status: "active", flags: { ...p.flags, missingSince: null, visited13: world.cycle } }, career: "Revenu de l'Étage fantôme (version officielle : " + excuse + ")" }, { op: "move", id, to: "f0.hall", force: true, activity: { kind: "social", label: "explique, un peu trop vite, où il était" } }],
+    event: { kind: "reappearance", title: `${p.name} réapparaît dans le Hall`, text: `Après ${Math.round((world.cycle - (p.flags.missingSince || world.cycle)) / 2)} heure(s) d'absence, ${p.name} sort de l'Ascenseur B et parle d'${excuse}. ${memory ? "Il se souvient pourtant d'une réunion qui n'a jamais eu lieu." : "Personne n'y croit, mais personne n'ose le contredire."}`, actors: [p.id], room: "f0.hall", importance: 3, rare: true, tags: ["anomalie", "étage fantôme"] },
+    facts: memory ? [{ kind: "memory_variant", text: `${p.name} se souvient d'une réunion « au 10e » qui n'apparaît dans aucune archive.`, about: [p.id], status: "rumor", truth: null, knownBy: [p.id] }] : [],
+  });
+}
 
 function keepOrBreakPromise(cx, { fact }) {
   const { world } = cx;
@@ -266,7 +393,7 @@ const OPPORTUNITIES = [
   ["promise", promiseOpportunities],
   ["strike", strikeOpportunity],
   ["rescue", rescueOpportunity],
-  ["rivalry", rivalryOpportunity],
+  ["rivalry", rivalryOpportunity, 0.5],
   ["contract", contractOpportunity],
   ["comeback", comebackOpportunity],
   ["debt_watch", debtWatch],
@@ -283,8 +410,8 @@ export function directorCycle(cx) {
   if (!rng.chance(daytime ? 0.12 : 0.03)) return;
   // On évalue toutes les occasions puis on en retient une, pondérée par son intérêt narratif.
   const candidates = [];
-  for (const [name, finder] of OPPORTUNITIES) {
-    for (const opp of finder(cx) || []) candidates.push([{ name, ...opp }, opp.score]);
+  for (const [name, finder, weight = 1] of OPPORTUNITIES) {
+    for (const opp of finder(cx) || []) candidates.push([{ name, ...opp }, opp.score * weight]);
   }
   const chosen = rng.weighted(candidates);
   if (!chosen) return;
@@ -378,7 +505,7 @@ function rivalryOpportunity(cx) {
     run: () => {
       // L'un fait courir une rumeur sur l'autre : vraie s'il connaît un secret, fausse sinon.
       const secret = a.knows.map((id) => world.facts[id]).find((f) => f && f.status === "secret" && f.about.includes(b.id));
-      const rumorText = secret ? secret.text : rng.pick([`${b.name} aurait truqué le dernier vote de son organisation.`, `${b.name} dormirait à l'Étage 13 certaines nuits.`, `${b.name} serait en réalité payé par la Banque du Sous-Sol.`, `${b.name} aurait volé la plante du Hall.`]);
+      const rumorText = secret ? secret.text : rng.pick([`${b.name} aurait truqué le dernier vote de son organisation.`, `${b.name} dormirait à l'Étage fantôme certaines nuits.`, `${b.name} serait en réalité payé par la Banque du Sous-Sol.`, `${b.name} aurait volé la plante du Hall.`]);
       return cx.commit({
         source: "director",
         kind: "smear",

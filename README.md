@@ -80,7 +80,8 @@ le bot.
    projet
 2. Dans le tableau de bord du projet : **SQL Editor** → **New query**, collez le
    contenu de [`schema.sql`](./schema.sql) fourni dans ce repo, puis **Run** — cela
-   crée les tables nécessaires (`bot_settings`, `feeds`, `routes`, `seen_deals`)
+   crée les tables nécessaires (`bot_settings`, `feeds`, `routes`, `seen_deals`,
+   `office_state` pour le QG et `madhouse_world` pour le Bâtiment 0)
 3. Allez dans **Project Settings** → **API** :
    - **Project URL** → à mettre dans `SUPABASE_URL`
    - **service_role secret key** → à mettre dans `SUPABASE_SECRET_KEY` (⚠️ ne
@@ -322,94 +323,188 @@ générés sont prévisualisés dans une iframe isolée (`sandbox`).
 
 ## 🏚️ THE MADHOUSE — le Bâtiment 0
 
-Ton entreprise (le QG) occupe désormais l'**Étage 1** d'un bâtiment fictif, absurde et
-persistant qui vit **sans toi** : 17 étages (dont un Étage 13 qui n'existe qu'en rumeur),
-une quinzaine de résidents (concierge, Syndic Générale, juge, banquier, journaliste, député,
-un homard…), tes employés et tes chats, des entreprises internes, un parlement, un tribunal,
-une banque, deux médias et un Département des Mystères. Tout est simulé, rien n'est réel :
-**aucune transaction financière réelle, aucune publication, aucune action extérieure**.
+Ton entreprise (le QG 3D) occupe l'**Étage 11** d'un immeuble fictif, absurde et persistant
+qui vit **sans toi** et se **visite** depuis Telegram ou la mini app : 16 niveaux, 98 pièces,
+~250 habitants qui se déplacent réellement de pièce en pièce, travaillent, mangent, dorment,
+se disputent, se lient, complotent et font circuler des rumeurs. Tout est simulé, rien n'est
+réel : **aucune transaction financière réelle, aucune publication, aucune action extérieure**.
 
-### Ce qui se passe
+### L'immeuble
 
-- **Personnages autonomes** : chacun agit selon son ambition (pouvoir, fortune, célébrité,
-  vérité, protéger les siens, changer de rôle…), ce qu'il sait et les lois en vigueur :
-  candidatures, partis, lobbying, putschs, start-up absurdes, prêts, enquêtes, fuites,
-  médiations, syndicalisation, coups d'éclat à la radio. Un secondaire peut devenir une
-  légende ; un puissant peut chuter.
-- **Économie virtuelle** (Crédits) : salaires, déjeuners au Réfectoire, loyers, prêts et
-  défauts, faillites, rachats de parts, dividendes, frais bancaires, inflation. Tout passe par
-  des virements validés ; seul le Trésor du Syndic émet des Crédits (Charte, R3).
-- **Politique et justice** : lois tirées d'un catalogue où **chaque loi change vraiment la
-  simulation** (Taxe sur la Sieste, Prohibition Fromagère, Couvre-feu des Couloirs, Loi sur la
-  Personnalité Animale…), quorum, votes, recours au Tribunal, élections, grèves.
-- **Médias** : la Gazette (sérieuse, mais possédée par la Banque) et Radio Cage d'Escalier
-  (satirique) publient des articles exacts, incomplets, biaisés… ou faux, qui finissent
-  parfois en procès en diffamation.
-- **WTF engine** : arrêts de l'Ascenseur B à l'Étage 13, doubles, morts administratives,
-  couloirs impossibles, souvenirs contradictoires — rares, conditionnés et **enregistrés avec
-  leur portée** ; le passé n'est jamais réécrit.
-- **Mystères** : trois grands mystères dont la vérité est tirée au sort et gardée secrète, plus
-  des mystères émergents (« Qui a lancé la rumeur ? ») construits à partir d'événements réels.
-  Indices, hypothèses vraies ou fausses, affaires classées : un mystère ne se résout que si
-  les preuves suivent, même si tu le demandes.
-- **CHAOS DIRECTOR** : il ne joue pas de scénario, il repère dans l'état du monde les
-  occasions qui relient des éléments existants (dette + rivalité, loi menaçante + contrat
-  antidaté, licencié fortuné…) et ouvre des **intrigues** persistantes qui s'enrichissent,
-  s'endorment, se réveillent, fusionnent et se dénouent.
-- **Tes décisions** : promotions, investissements, primes de grève… arrivent avec des boutons
-  Oui/Non (Telegram et mini app). Tu peux mandater un enquêteur. Tu arbitres ; tu ne
-  réécris pas l'histoire.
+| Niveau | Étage | Exemples de pièces |
+| --- | --- | --- |
+| 13 | Bureau du Propriétaire (toi) | Bureau, Salle des Écrans, Coffre des Décisions |
+| 12 | Serres & Serveurs | serres, salle des serveurs, chaufferie |
+| 11 | Ton entreprise | open space, direction, cuisine, salle de repos des chats |
+| 10 | **Étage fantôme** | absent du Plan Officiel ; ouvert seulement certains soirs, avec ses propres règles |
+| 9 | Tribunal des Couloirs | audience, greffe, enquêtes, scellés |
+| 8 | Hôtel des Employés | ailes A/B/C (on y dort), salon, cuisine, buanderie |
+| 7 | Club des Puissants | salon, dîner, fumoir (réservé aux membres) |
+| 6 | Parlement Interne | Hémicycle, commissions, buvette, lobby |
+| 5 | Laboratoires | labo, prototypes, IA, réserve |
+| 4 | Médias Internes | Gazette, télé, podcast, com, influence |
+| 3 | Bourse Interne | corbeille, banque, start-up, biscuiterie |
+| 2 | Direction | réunions A/B, finances, Registre |
+| 1 | Ressources Humaines | entretiens, évaluations, séminaire |
+| 0 | Accueil & Cirque | Hall (aquarium de Gustave, pigeon Roucoulade), cafétéria, plaintes |
+| -1 | Logistique | quai, entrepôt, objets trouvés, marché noir |
+| -2 | Département des choses qui ne devraient pas exister | archives interdites, pièce inconnue |
 
-### Notifications et rapport
+Chaque pièce a un identifiant, une description, une fonction, des accès (public, personnel,
+membres, propriétaire, caché, fantôme), des sorties, des objets et un journal de ce qui s'y
+est passé. Les présents d'une pièce sont **calculés à partir de la vraie position** de chacun.
 
-Le moteur ne notifie que ce qui compte (importance ≥ 4, événements rares, décisions), au plus
-**2 messages par jour**, espacés de 2 h, jamais entre 23 h et 8 h, regroupés par 3. Chaque
-matin (9 h), s'il s'est passé quelque chose, il envoie le rapport éditorial **« Pendant ton
-absence »** : faits majeurs avec leur **chaîne causale** (« pourquoi »), pouvoir, économie,
-intrigues, ascensions et chutes, mystères, rumeurs — les faits, rumeurs et hypothèses sont
-toujours étiquetés. Tout se règle avec `/madhouse_config`.
+### Les habitants
+
+22 personnages écrits à la main (la concierge, la Syndic, le juge, le banquier, le homard
+Gustave…), tes employés et tes chats, et un **générateur déterministe** qui complète jusqu'à
+la population choisie (250 par défaut, répartie par service — configurable). Chacun a :
+identité, âge, métier, service, étage de travail et chambre, personnalité (traits, goûts,
+défauts, peurs, ambitions, habitudes, compétences), humour (14 styles : bureaucratie absurde,
+culture startup, sitcom, complot, méta…), ressources (crédits, réputation, influence),
+objectifs court/long terme, secrets, souvenirs, croyances, besoins (énergie, faim, vie sociale,
+stress) et humeur, relations **asymétriques** (A peut détester B qui l'adore), historique de
+carrière.
+
+### La vie autonome
+
+- **Emplois du temps** : travail en semaine, pauses, déjeuner, soirée, week-end, sommeil
+  (couche-tard, lève-tôt). Les déplacements passent par l'Ascenseur B (qui a son caractère)
+  ou l'escalier ; les accès, couvre-feux et lois s'appliquent.
+- **Interactions de proximité** : seuls les gens **dans la même pièce** se parlent, se
+  disputent, se confient un secret, se transmettent une rumeur (crue, mise en doute ou
+  exploitée). Une information privée ne devient publique que si elle se propage vraiment.
+- **Événements probabilistes** : 25 modèles (14 courants, 8 rares, 3 très rares) avec
+  préconditions, heures, temps de recharge et probabilité réglable (chaos, multiplicateurs
+  de rareté). 8 **arcs systémiques** sur plusieurs jours (la caisse noire, le portrait qui
+  disparaît, le syndicat des pigeons, les colis volatilisés, le séminaire de cohésion, la
+  machine à café, la photo compromettante, le vice-président de quelque chose) avec étapes,
+  indices, conséquences et dénouements.
+- Économie virtuelle (salaires, loyers, prêts, faillites, start-up), Parlement (lois qui
+  changent vraiment la simulation), Tribunal, Médias (articles exacts, biaisés ou faux),
+  mystères à la vérité tirée au sort, anomalies, et le **Chaos Director** qui relie des
+  éléments existants en intrigues persistantes.
+- **Humour contextuel** : running gags (l'Ascenseur B, Gustave, le pigeon, la machine à café,
+  Kevin du 3e…), répliques choisies selon le style d'humour du personnage et la situation —
+  des mécanismes, pas des scripts recopiés.
+
+### Explorer
+
+- **Telegram** : `/building` ouvre le menu principal (Explorer, Annuaire, Actualités,
+  Enquêtes, Entreprises, Politique, Anomalies, Historique, Centre de contrôle). On navigue
+  étage → pièce → personnage dans **un seul message** édité, avec retour et pagination.
+  Raccourcis : `/explore`, `/agents`, `/agent <nom>`, `/news`, `/investigate`, `/economy`,
+  `/organizations`, `/anomalies`, `/history`, `/control`, `/report`.
+- **Mini app** : bouton **Bâtiment** du dock → coupe de l'immeuble, plans d'étage, pièces avec
+  leurs présents, fiches complètes, annuaire filtrable, actualités, enquêtes, entreprises,
+  politique, anomalies, historique et Centre de contrôle.
+- Aucun écran n'invente rien : tout est construit à partir de l'état réel du monde.
+
+### Ce que tu peux faire (propriétaire)
+
+Suivre un personnage, organiser une fête ou un séminaire dans une pièce (les invités y vont
+vraiment), proposer une loi au Parlement, lancer un défi entre deux services, financer une
+entreprise, promouvoir quelqu'un, faire enquêter sur une rumeur, orienter une enquête,
+trancher les décisions qui t'attendent (Oui/Non). Toutes ces interventions sont **séparées**
+des événements naturels (source « boss », journal du propriétaire) et passent par le même
+validateur : tu arbitres, tu ne réécris pas l'histoire.
+
+### Rapport d'absence
+
+`/report` (et chaque matin à 9 h s'il s'est passé quelque chose) : **« RAPPORT D'ABSENCE —
+8 HEURES »** avec des chiffres issus des statistiques horaires du moteur (cycles simulés,
+événements dont rares par étage, relations changées, rumeurs, alliances, crises, lois, pertes
+d'argent, cibles des médias), puis les faits majeurs avec leur **chaîne causale**, le pouvoir,
+l'économie, les intrigues, les ascensions et chutes, les mystères et les rumeurs (toujours
+étiquetées). Si le serveur était arrêté plus longtemps que la limite de rattrapage, le rapport
+le dit : **ce temps n'est pas simulé, rien n'y est inventé**. Le même rapport s'affiche en tête
+des Actus de la mini app.
+
+### Réglages (`/madhouse_config`, administrateurs)
+
+```
+/madhouse_config                       affiche les réglages
+/madhouse_config population 300        population cible (les nouveaux arrivent par petits groupes)
+/madhouse_config chaos 70              0 = calme plat, 100 = chaos total
+/madhouse_config events 6              événements max par cycle
+/madhouse_config rare 2                multiplicateur des événements rares / très rares
+/madhouse_config speed 2               vitesse du temps simulé
+/madhouse_config dialogue riche        niveau de détail des dialogues
+/madhouse_config cycle 30 · pause · resume · ai on|off · ai_calls 5
+/madhouse_config notif 2 · importance 4 · quiet 23 8 · report 9 on|off
+```
+
+Les mêmes curseurs existent dans le Centre de contrôle de la mini app.
+
+### Mode test du chaos (développement uniquement)
+
+Avec `WORLD_DEV_TOOLS=true`, les administrateurs voient dans le Centre de contrôle : simuler
+1 cycle / 1 heure / 1 journée, déclencher un événement ou un arc précis, vérifier la
+cohérence, et **rejouer** une journée avec une graine dans un bac à sable (sans toucher au
+monde). Sans cette variable (défaut), ces outils sont refusés côté serveur, même si on les
+appelle directement.
 
 ### Architecture et garanties
 
 ```
 webapp/shared/world/
   index.js     orchestrateur : cycles de 30 min, rattrapage borné, annulation d'un cycle si un
-               invariant casse, notifications anti-spam, actions du joueur (world.*)
+               invariant casse, statistiques horaires, actions du joueur (world.*)
+  building.js  étages, pièces, accès, objets ;  castgen.js  ~250 personnages (déterministe)
+  life.js      besoins, emplois du temps, déplacements, interactions de proximité
+  events.js    événements probabilistes ;  arcs.js  arcs de plusieurs jours ;  humor.js  humour
   ops.js       noyau transactionnel : propositions d'opérations atomiques, validateur,
-               dédoublonnage, invariants (masse monétaire, soldes, organisations)
+               dédoublonnage, invariants (masse monétaire, soldes, positions, organisations)
   memory.js    événements immuables + causes, faits (confirmé / secret / rumeur / hypothèse),
-               connaissance par personnage, propagation des rumeurs, chronique compactée
-  state.js     création du monde, synchronisation avec le QG (embauches, licenciements, chats)
-  economy.js · politics.js · agents.js · media.js · wtf.js · director.js   systèmes
-  report.js · view.js   rapport éditorial et vues sans secrets ; ai.js   IA narrative budgétée
+               connaissance par personnage, propagation, chronique compactée
+  explore.js   vues de l'explorateur (sans secrets) ;  report.js  rapport d'absence
+  economy.js · politics.js · agents.js · media.js · wtf.js · director.js · ai.js
+src/office/explorer.js     écrans Telegram de l'explorateur
 src/office/building.js     commandes et boutons Telegram du Bâtiment
-webapp/js/ui/madhouse.js   panneau « Bâtiment » de la mini app
+webapp/js/ui/madhouse.js   explorateur de la mini app
 ```
 
-- **Persistance** : le monde est stocké dans l'état du QG (`office_state`, jsonb), sauvegardé
-  avec lui ; aucune migration SQL n'est nécessaire. Le temps du Bâtiment suit le temps réel :
-  après un redémarrage, les cycles manqués sont rattrapés (24 max par passage, 3 jours max).
+- **Persistance** : le monde vit dans sa propre table **`madhouse_world`** (voir
+  [`schema.sql`](./schema.sql)), séparée du QG (`office_state`, sauvegardé souvent et
+  désormais léger). Le monde n'est réécrit que lorsqu'il change (au plus toutes les 15 s,
+  et toujours à l'arrêt). **Migration** : exécuter la dernière version de `schema.sql` ; au
+  premier démarrage, le monde déjà présent dans `office_state` est repris puis déplacé
+  automatiquement. Sans la table, le bot continue avec l'ancien stockage (et le signale).
+- **Pas de double simulation** : un **bail** (`lease_holder`, `lease_until`) garantit qu'une
+  seule instance du bot simule un monde donné ; une seconde instance garde le Bâtiment
+  visitable en lecture seule et reprend la main si le bail se libère. Une **garde monotone**
+  (`cycle`) empêche d'écraser un monde plus avancé par un plus ancien.
+- **Temps** : le Bâtiment suit le temps réel ; après un redémarrage, les cycles manqués sont
+  rattrapés (24 max par passage, 3 jours max) et le reste est consigné comme non simulé.
 - **Déterminisme** : le hasard d'un cycle dépend de la graine du monde et du numéro de cycle ;
-  rejouer un cycle après un crash donne exactement le même résultat (pas de double application).
+  rejouer un cycle après un crash donne exactement le même résultat (pas de double effet).
 - **Validation** : toute modification passe par une proposition validée (fonds suffisants,
-  personnages et lieux existants, causes réellement enregistrées, champs autorisés, loi déposée
-  par un député, pas de doublon ni de quasi-doublon) ; un rejet est journalisé, jamais appliqué
-  en silence. Après chaque cycle, les invariants sont vérifiés et le cycle est annulé s'ils
-  cassent.
+  personnages et lieux existants, accès autorisés, causes réellement enregistrées, champs
+  autorisés, pas de doublon) ; un rejet est journalisé, jamais appliqué en silence. Après
+  chaque cycle, les invariants sont vérifiés et le cycle est annulé s'ils cassent.
 - **Connaissance** : un personnage ne sait que ce qu'il a appris ; le joueur ne voit ni la
   vérité des mystères, ni la véracité des rumeurs, ni les secrets non révélés, ni les
   virements occultes. Le monde complet n'est jamais envoyé dans le polling de la mini app.
 - **IA hybride** : la simulation est entièrement déterministe et fonctionne sans IA. Avec une
   clé Claude, seuls les moments rares ou majeurs reçoivent un court récit, dans la limite de
-  `WORLD_AI_DAILY_CALLS` appels par jour (plafond opérateur qu'aucun réglage en jeu ne peut
-  dépasser), avec journal d'usage (tokens). Le texte généré est traité comme une donnée non
+  `WORLD_AI_DAILY_CALLS` appels par jour. Le texte généré est traité comme une donnée non
   fiable : nettoyé, borné, affiché à part, sans aucun effet sur le monde.
-- **Sécurité** : les commandes sont réservées aux administrateurs (`ADMIN_USER_IDS`) ; un
+- **Sécurité** : réglages et outils réservés aux administrateurs (`ADMIN_USER_IDS`) ; un
   personnage « PDG » n'a accès à aucun réglage, secret ou permission ; tout le texte est
   échappé avant envoi à Telegram.
 
 Variables d'environnement : `WORLD_NOTIFICATIONS` (défaut `true`), `WORLD_AI` (défaut `true`,
-nécessite `ANTHROPIC_API_KEY`), `WORLD_AI_DAILY_CALLS` (défaut `6`, 0 pour couper).
+nécessite `ANTHROPIC_API_KEY`), `WORLD_AI_DAILY_CALLS` (défaut `6`, 0 pour couper),
+`WORLD_DEV_TOOLS` (défaut `false` : mode test du chaos).
+
+### Tests
+
+`npm test` couvre notamment : déplacement réel et contrôle d'accès, action du propriétaire
+qui modifie le monde, relations asymétriques, information privée jamais publique d'elle-même,
+probabilité des événements rares, aucune double application (même instant, même ordre,
+chargement concurrent), parcours bâtiment → étage → pièce → personnage (vues et écrans
+Telegram), permissions du mode test, rapport d'absence chiffré, persistance séparée et
+redémarrage, bail entre deux instances, migration d'une vraie sauvegarde v1.
 
 ## Déploiement
 

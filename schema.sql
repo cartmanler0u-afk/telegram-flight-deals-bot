@@ -37,3 +37,18 @@ create table if not exists office_state (
   state jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Bâtiment 0 (THE MADHOUSE) : le monde simulé, stocké à part du QG (plusieurs centaines de Ko).
+-- cycle : garde monotone (on n'écrase jamais un monde plus avancé par un plus ancien).
+-- lease_holder / lease_until : bail d'une instance du bot, pour qu'un monde ne soit jamais
+-- simulé deux fois en parallèle (déploiement qui se chevauche, deuxième instance…).
+-- Migration : sans action manuelle, le monde déjà présent dans office_state.state.world
+-- est repris automatiquement au premier démarrage puis déplacé ici.
+create table if not exists madhouse_world (
+  owner_id text primary key,
+  world jsonb,
+  cycle bigint not null default 0,
+  lease_holder text,
+  lease_until timestamptz,
+  updated_at timestamptz not null default now()
+);

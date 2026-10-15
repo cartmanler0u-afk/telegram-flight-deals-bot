@@ -23,6 +23,8 @@ export const config = {
   worldNotifications: process.env.WORLD_NOTIFICATIONS !== "false",
   worldAi: process.env.WORLD_AI !== "false",
   worldAiDailyCalls: Math.max(0, Math.min(200, Number(process.env.WORLD_AI_DAILY_CALLS ?? 6) || 0)),
+  // Mode test du chaos (simuler du temps, déclencher des événements) : administrateurs + ce drapeau.
+  worldDevTools: process.env.WORLD_DEV_TOOLS === "true",
 };
 
 if (!config.telegramToken) {
