@@ -10,6 +10,7 @@ import { Person, mat } from "./people.js";
 import { LifeDirector } from "./life.js";
 import { Crowd } from "./crowd.js";
 import { CatHerd } from "./cats.js";
+import { FloorScene } from "./floors.js";
 import { AREAS, BOUNDS, MEETING_SEATS, SPOTS, ROOM_DESKS, PODS, DEPT_PODS, INTERN_POD, EOTM_TOTEM, assignDesks, deptAnchor, deskTop } from "./layout.js";
 import { ROOMS, PANELS, DEPARTMENTS, ROLES, TASK_TYPES, roleOf } from "../../shared/roster.js";
 import { taskProgress, liveMeeting, computeKpis } from "../../shared/engine.js";
@@ -144,8 +145,11 @@ class Actor {
 }
 
 export class World {
-  constructor(container, { now, onSelectPanel, onSelectAgent, onLife, onInterview, onCat, onQuestFound }) {
+  constructor(container, { now, onSelectPanel, onSelectAgent, onLife, onInterview, onCat, onQuestFound, onFloorRoom, onFloorPerson }) {
     this.container = container;
+    this.onFloorRoom = onFloorRoom;
+    this.onFloorPerson = onFloorPerson;
+    this.floor = null; // étage du Bâtiment 0 affiché à la place du QG (null = le QG)
     this.now = now;
     this.onSelectPanel = onSelectPanel;
     this.onSelectAgent = onSelectAgent;
@@ -290,6 +294,7 @@ export class World {
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h);
     this.labels.setSize(w, h);
+    this.floorLabels?.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -326,11 +331,19 @@ export class World {
     this.tween = { t0: performance.now(), dur: 900, fromTarget: this.controls.target.clone(), fromPos: this.camera.position.clone(), toTarget: view.target, toPos: view.position };
   }
 
+  // Emprise de ce qui est affiché : le QG, ou l'étage du Bâtiment visité.
+  get activeBounds() {
+    return this.floor ? this.floor.bounds : BOUNDS;
+  }
+
   overview(animate = true) {
     // Distance minimale pour que tout l'étage (murs compris) tienne entre le HUD et le dock.
-    const target = new THREE.Vector3(CENTER_X + (this.portrait ? 0.6 : 0), 0, this.portrait ? 0.5 : 1);
+    const B = this.activeBounds;
+    const cx = (B.minX + B.maxX) / 2;
+    const cz = this.floor ? (B.minZ + B.maxZ) / 2 : 0;
+    const target = new THREE.Vector3(cx + (this.portrait ? 0.6 : 0), 0, cz + (this.portrait ? 0.5 : 1));
     const corners = [];
-    for (const [x, z] of [[BOUNDS.minX, BOUNDS.minZ], [BOUNDS.maxX, BOUNDS.minZ], [BOUNDS.maxX, BOUNDS.maxZ], [BOUNDS.minX, BOUNDS.maxZ]]) {
+    for (const [x, z] of [[B.minX, B.minZ], [B.maxX, B.minZ], [B.maxX, B.maxZ], [B.minX, B.maxZ]]) {
       corners.push(new THREE.Vector3(x, 0, z), new THREE.Vector3(x, 2.7, z));
     }
     const cam = this.camera.clone();
@@ -389,6 +402,73 @@ export class World {
   clearSelection() {
     this.selected = null;
     this.highlight(null);
+    this.floor?.select(null);
+  }
+
+  // ---------------------------------------------------------------- étages du Bâtiment 0
+
+  get inFloor() {
+    return !!this.floor;
+  }
+
+  // Affiche un étage (données réelles du monde) à la place du QG, avec le même rendu et la même caméra.
+  enterFloor(data) {
+    if (this.floor?.id === data.id) {
+      this.floor.apply(data);
+      return;
+    }
+    const savedView = this.floor ? this.savedView : { target: this.controls.target.clone(), position: this.camera.position.clone() };
+    this.disposeFloor();
+    this.savedView = savedView;
+    this.floor = new FloorScene(data, { onSelectRoom: (id) => this.onFloorRoom?.(id), onSelectPerson: (id) => this.onFloorPerson?.(id) });
+    if (!this.floorLabels) {
+      this.floorLabels = new CSS2DRenderer();
+      this.floorLabels.domElement.className = "label-layer floor-labels";
+      Object.assign(this.floorLabels.domElement.style, { position: "absolute", top: "0", left: "0" });
+      this.container.appendChild(this.floorLabels.domElement);
+      this.floorLabels.setSize(this.container.clientWidth || window.innerWidth, this.container.clientHeight || window.innerHeight);
+    }
+    this.floorLabels.domElement.style.display = "";
+    this.labels.domElement.style.display = "none";
+    this.selected = null;
+    this.tween = null;
+    this.renderer.shadowMap.needsUpdate = true;
+    this.overview(false);
+  }
+
+  updateFloor(data) {
+    if (this.floor?.id === data.id) this.floor.apply(data);
+  }
+
+  leaveFloor() {
+    if (!this.floor) return;
+    this.disposeFloor();
+    this.labels.domElement.style.display = "";
+    if (this.floorLabels) this.floorLabels.domElement.style.display = "none";
+    this.tween = null;
+    if (this.savedView) this.flyTo(this.savedView, false);
+    else this.overview(false);
+    this.savedView = null;
+  }
+
+  disposeFloor() {
+    this.floor?.dispose();
+    this.floor = null;
+  }
+
+  focusFloorRoom(roomId, sheet = true) {
+    const c = this.floor?.roomCenter(roomId);
+    if (!c) return;
+    this.floor.select(null);
+    this.flyTo(this.viewFor(c, 15, sheet));
+  }
+
+  focusFloorPerson(id, sheet = true) {
+    const p = this.floor?.positionOf(id);
+    if (!p) return false;
+    this.floor.select(id);
+    this.flyTo(this.viewFor(new THREE.Vector3(p.x, 0, p.z), 9, sheet));
+    return true;
   }
 
   // ---------------------------------------------------------------- étiquettes et sélection
@@ -465,6 +545,12 @@ export class World {
       const rect = el.getBoundingClientRect();
       ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, this.camera);
+      if (this.floor) {
+        const hit = this.floor.pick(raycaster);
+        if (hit?.type === "person") this.onFloorPerson?.(hit.id);
+        else if (hit?.type === "room") this.onFloorRoom?.(hit.id);
+        return;
+      }
       // Objets perdus des quêtes, puis chats, puis employés.
       const itemHit = raycaster.intersectObjects([...this.questItems.values()].map((i) => i.hit), false)[0];
       if (itemHit) {
@@ -1490,14 +1576,27 @@ export class World {
       if (k >= 1) this.tween = null;
     }
     const target = this.controls.target;
-    const clampedX = THREE.MathUtils.clamp(target.x, BOUNDS.minX, BOUNDS.maxX);
-    const clampedZ = THREE.MathUtils.clamp(target.z, BOUNDS.minZ, BOUNDS.maxZ + 4);
+    const B = this.activeBounds;
+    const clampedX = THREE.MathUtils.clamp(target.x, B.minX, B.maxX);
+    const clampedZ = THREE.MathUtils.clamp(target.z, B.minZ, B.maxZ + 4);
     if (clampedX !== target.x || clampedZ !== target.z || target.y !== 0) {
       const shift = new THREE.Vector3(clampedX - target.x, -target.y, clampedZ - target.z);
       target.add(shift);
       this.camera.position.add(shift);
     }
     this.controls.update();
+    if (this.floor) {
+      // Étage du Bâtiment : le QG est en pause visuelle, seul l'étage visité est animé et rendu.
+      this.floor.tick(dt, t, this.camera, this.controls);
+      const farFloor = this.camera.position.distanceTo(this.controls.target) > 30 && this.container.clientWidth < 700;
+      if (farFloor !== this.farFloorTags) {
+        this.farFloorTags = farFloor;
+        this.floorLabels.domElement.classList.toggle("far", farFloor);
+      }
+      this.renderer.render(this.floor.scene, this.camera);
+      this.floorLabels.render(this.floor.scene, this.camera);
+      return;
+    }
     const compact = this.camera.position.distanceTo(this.controls.target) > 34;
     if (compact !== this.compactTags) {
       this.compactTags = compact;

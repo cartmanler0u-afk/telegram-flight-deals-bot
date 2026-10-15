@@ -7,6 +7,8 @@ import { missionForm, openDocument, avatar } from "./ui/components.js";
 import { PANELS, roleOf } from "../shared/roster.js";
 import { computeKpis, liveMeeting } from "../shared/engine.js";
 import { HIDING_SPOTS } from "../shared/social.js";
+import { createElevator } from "./ui/elevator.js";
+import { openMadhouseAt } from "./ui/madhouse.js";
 
 const DOCK = ["overview", ...Object.keys(PANELS)];
 const ONBOARDED_KEY = "qg-onboarded-v3";
@@ -135,6 +137,7 @@ async function boot() {
 
   // ---- Scène 3D (facultative : l'interface reste utilisable sans WebGL)
   let world = null;
+  let elevator = null;
   const life = createLifeStore();
   const ticker = createTicker(() => panels.openPanel("rh"));
   const panels = new Panels({
@@ -142,8 +145,13 @@ async function boot() {
     life,
     getWorld: () => world,
     onOpen: (panel) => {
-      if (panel.kind === "panel") world?.focusPanel(panel.id, true);
-      else world?.focusAgent(panel.id, true);
+      // Le panneau Bâtiment accompagne la visite des étages ; tout autre panneau ramène au QG.
+      const madhouse = panel.kind === "panel" && panel.id === "madhouse";
+      if (world?.inFloor && !madhouse) elevator?.leave();
+      if (!world?.inFloor) {
+        if (panel.kind === "panel") world?.focusPanel(panel.id, true);
+        else world?.focusAgent(panel.id, true);
+      }
       renderDock();
       syncBackButton();
     },
@@ -177,6 +185,17 @@ async function boot() {
         }
       },
       onQuestFound: (questId, spotId) => solveSeek(questId, spotId),
+      // Étages du Bâtiment 0 : une pièce ou un habitant touché ouvre sa fiche.
+      onFloorRoom: (roomId) => {
+        haptic("light");
+        openMadhouseAt(panels, { view: "room", id: roomId });
+        world?.focusFloorRoom(roomId, true);
+      },
+      onFloorPerson: (personId) => {
+        haptic("light");
+        openMadhouseAt(panels, { view: "person", id: personId });
+        world?.focusFloorPerson(personId, true);
+      },
       onInterview: (item) => {
         life.interview(item);
         if (!document.body.classList.contains("sheet-open") || window.innerWidth >= 900) showInterview(item);
@@ -188,7 +207,11 @@ async function boot() {
       // préférence par défaut
     }
     world.init();
-    if (location.hostname === "localhost") window.__qgWorld = world; // diagnostic en développement local
+    if (location.hostname === "localhost") {
+      // diagnostic en développement local
+      window.__qgWorld = world;
+      window.__qgBackend = backend;
+    }
     if (tg?.onEvent) tg.onEvent("viewportChanged", () => world.resize());
   } catch (err) {
     console.error(err);
@@ -206,6 +229,15 @@ async function boot() {
     } catch (err) {
       toast(err.message, "error");
     }
+  }
+
+  // ---- Ascenseur B : visite des autres étages en 3D
+  if (world) {
+    elevator = createElevator({
+      backend,
+      getWorld: () => world,
+      onOpenRoute: (route) => openMadhouseAt(panels, route),
+    });
   }
 
   // ---- HUD
@@ -290,12 +322,14 @@ async function boot() {
   // ---- Bouton retour Telegram
   function syncBackButton() {
     if (!tg?.BackButton || !tg.isVersionAtLeast?.("6.1")) return;
-    if (panels.isOpen || hasModal()) tg.BackButton.show();
+    if (panels.isOpen || hasModal() || elevator?.inFloor) tg.BackButton.show();
     else tg.BackButton.hide();
   }
   if (tg?.BackButton && tg.isVersionAtLeast?.("6.1")) {
     tg.BackButton.onClick(() => {
-      if (!closeTopModal()) panels.close();
+      if (closeTopModal()) return syncBackButton();
+      if (panels.isOpen) panels.close();
+      else if (elevator?.inFloor) elevator.goTo("f11");
       syncBackButton();
     });
   }
@@ -375,6 +409,7 @@ async function boot() {
   let prev = null;
   backend.subscribe((state) => {
     world?.sync(state);
+    elevator?.onState(state);
     panels.update(state);
     updateHud(state);
     renderDock();

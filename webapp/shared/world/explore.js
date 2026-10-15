@@ -173,6 +173,86 @@ export function floorView(world, state, floorId, now = Date.now()) {
   };
 }
 
+// ------------------------------------------------------------------ étage en 3D
+//
+// Ce que la scène 3D d'un étage affiche : les pièces visibles (mêmes règles que l'explorateur),
+// chaque occupant réel avec sa pièce et son activité du moment, et les répliques réellement
+// prononcées récemment sur l'étage. Rien n'est inventé pour « animer » la scène.
+
+const ACT_POSE = { sleep: "sleep", work: "work", meeting: "meeting", food: "food", social: "social", rest: "rest", transit: "transit", special: "special", secret: "special", owner: "work", animal: "animal", idle: "idle" };
+
+export function floor3dView(world, state, floorId, now = Date.now()) {
+  const f = world.building.floors[floorId];
+  if (!f) return null;
+  const visible = (r) => r.discovered || r.kind === "transit";
+  const rooms = roomsOfFloor(world, floorId).filter(visible);
+  const roomIds = new Set(rooms.map((r) => r.id));
+  const follows = new Set(world.owner?.follows || []);
+  const people = [];
+  for (const p of Object.values(world.people)) {
+    if (!p.location || !roomIds.has(p.location) || ["gone", "missing"].includes(p.status)) continue;
+    people.push({
+      id: p.id,
+      name: p.name,
+      title: p.title,
+      room: p.location,
+      kind: p.kind,
+      species: p.species || null,
+      dept: p.dept || null,
+      age: p.age || null,
+      act: ACT_POSE[p.activity?.kind] || "idle",
+      label: p.activity?.label || "est là",
+      mood: MOOD(p.mood ?? 50),
+      star: !!p.star,
+      followed: follows.has(p.id),
+      atWork: p.workRoom === p.location,
+      influence: p.influence || 0,
+    });
+  }
+  // Répliques des 3 dernières heures du Bâtiment, sur cet étage (horloge du monde, pas du téléphone).
+  const since = (world.lastCycleAt || now) - 3 * HOUR;
+  const lines = [];
+  for (const e of eventsOnFloor(world, floorId, since)) {
+    for (const d of e.dialogue || []) {
+      if (!d?.line || !world.people[d.who]) continue;
+      lines.push({ room: e.room, who: d.who, name: world.people[d.who].name, text: d.line, title: e.title, at: e.at });
+    }
+  }
+  const occ = occupancy(world);
+  const floors = sortedFloors(world)
+    .filter((x) => x.discovered || x.id !== GHOST_FLOOR || isGhostOpen(world))
+    .map((x) => ({ id: x.id, level: x.level, short: x.short, kind: x.kind, access: floorAccess(world, x), people: x.rooms.reduce((s, id) => s + (occ[id]?.length || 0), 0) }));
+  const c = clock(world);
+  return {
+    id: f.id,
+    level: f.level,
+    name: f.name,
+    short: f.short,
+    kind: f.kind,
+    blurb: f.blurb,
+    access: floorAccess(world, f),
+    rule: f.rules?.temp?.text || null,
+    ghost: !!f.rules?.ghost,
+    cycle: world.cycle,
+    clock: c.label,
+    hour: c.hour,
+    elevator: world.building.elevator.mood,
+    rooms: rooms.map((r) => ({
+      id: r.id,
+      key: r.id.split(".")[1],
+      name: r.name,
+      kind: r.kind,
+      access: r.access,
+      offPlan: r.onPlan === false,
+      total: (occ[r.id] || []).length,
+      lastEvent: r.log.filter((l) => l.public !== false).at(-1)?.title || null,
+    })),
+    people,
+    lines: lines.slice(-30),
+    floors,
+  };
+}
+
 // ------------------------------------------------------------------ pièce
 
 export function roomView(world, state, roomIdValue, { page = 0, per = 10 } = {}) {

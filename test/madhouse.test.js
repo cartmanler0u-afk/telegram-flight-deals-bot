@@ -20,6 +20,9 @@ import { templateChance, TEMPLATES } from "../webapp/shared/world/events.js";
 import { makeRng } from "../webapp/shared/world/core.js";
 import { knows } from "../webapp/shared/world/memory.js";
 import { readFileSync } from "node:fs";
+import * as THREE from "three";
+import { computeFloorPlan, walkPath, CORRIDOR } from "../webapp/js/scene/floorplan.js";
+import { furnish } from "../webapp/js/scene/floorkit.js";
 import { gunzipSync } from "node:zlib";
 
 const T0 = Date.UTC(2026, 9, 14, 6, 0); // mercredi 14 octobre 2026, 8 h à Paris
@@ -650,4 +653,82 @@ test("migration v1 → v2 : une vraie sauvegarde v1 devient visitable sans rien 
   assert.deepEqual(w.errors || [], []);
   assert.equal(w.stats.rollbacks || 0, 0);
   assert.equal(migrateState(state, T0 + 3 * DAY).world.version, 2, "idempotente");
+});
+
+// ---------------------------------------------------------------- 3D des étages
+
+test("3D : chaque étage a un plan cohérent (pièces sans chevauchement, une porte sur le couloir, chemins)", () => {
+  const { state, world, now } = settled();
+  for (const fid of Object.keys(world.building.floors)) {
+    const v = exploreQuery(state, { view: "floor3d", id: fid }, now);
+    const plan = computeFloorPlan(v.rooms);
+    const rects = v.rooms.map((r) => plan.rooms[r.id]);
+    assert.ok(rects.every(Boolean), `${fid} : toutes les pièces visibles sont placées`);
+    for (let i = 0; i < rects.length; i++) {
+      const a = rects[i];
+      assert.ok(a.x0 >= plan.bounds.minX - 1e-6 && a.x1 <= plan.bounds.maxX + 1e-6 && a.z0 >= plan.bounds.minZ - 1e-6 && a.z1 <= plan.bounds.maxZ + 1e-6, `${a.id} dans l'emprise`);
+      for (let j = i + 1; j < rects.length; j++) {
+        const b = rects[j];
+        const overlap = a.x0 < b.x1 - 0.01 && b.x0 < a.x1 - 0.01 && a.z0 < b.z1 - 0.01 && b.z0 < a.z1 - 0.01;
+        assert.ok(!overlap, `${a.id} et ${b.id} ne se chevauchent pas`);
+      }
+      if (a.key === "palier") continue;
+      assert.ok(a.door && Math.abs(Math.abs(a.door.z) - CORRIDOR / 2) < 1e-6 && a.door.x > a.x0 && a.door.x < a.x1, `${a.id} a sa porte sur le couloir`);
+      const palier = Object.values(plan.rooms).find((r) => r.key === "palier");
+      const path = walkPath(plan, { x: palier.cx, z: palier.cz }, palier.id, { x: a.cx, z: a.cz }, a.id);
+      assert.deepEqual(path.at(-1), [a.cx, a.cz], "le chemin mène à destination");
+      assert.ok(path.some(([x, z]) => Math.abs(x - a.door.x) < 1e-6 && Math.abs(z) <= CORRIDOR / 2 + 1.2), "en passant par la porte");
+    }
+  }
+});
+
+test("3D : la vue d'un étage montre exactement les occupants réels, sans pièce cachée ni réplique inventée", () => {
+  const { state, world } = settled();
+  let now = catchUp(state, T0 + 10 * HOUR);
+  for (let k = 0; k < 4; k++, now = catchUp(state, now + 5 * HOUR)) {
+    for (const fid of Object.keys(world.building.floors)) {
+      const v = exploreQuery(state, { view: "floor3d", id: fid }, now);
+      const visible = new Set(v.rooms.map((r) => r.id));
+      for (const r of world.building.floors[fid].rooms) {
+        const room = world.building.rooms[r];
+        assert.equal(visible.has(r), !!(room.discovered || room.kind === "transit"), `${r} : visible seulement si découverte`);
+      }
+      const expected = Object.values(world.people).filter((p) => visible.has(p.location) && !["gone", "missing"].includes(p.status)).map((p) => p.id).sort();
+      assert.deepEqual(v.people.map((p) => p.id).sort(), expected, `${fid} : les présents sont ceux qui y sont vraiment`);
+      for (const p of v.people) assert.equal(p.room, world.people[p.id].location);
+      for (const r of v.rooms) assert.equal(r.total, v.people.filter((p) => p.room === r.id).length);
+      for (const line of v.lines) {
+        const ev = world.events.find((e) => e.room === line.room && (e.dialogue || []).some((d) => d.who === line.who && d.line === line.text));
+        assert.ok(ev && ev.public, "chaque réplique vient d'un événement public enregistré sur l'étage");
+      }
+    }
+  }
+});
+
+test("3D : assez de places (lits, chaises, foule) pour que chaque habitant soit visible", () => {
+  const { state, world } = settled();
+  const capacity = {};
+  for (const fid of Object.keys(world.building.floors)) {
+    const v = exploreQuery(state, { view: "floor3d", id: fid });
+    const plan = computeFloorPlan(v.rooms);
+    for (const room of v.rooms) {
+      const r = plan.rooms[room.id];
+      const [w, d] = r.side === "west" ? [r.d, r.w] : [r.w, r.d];
+      let seed = 7;
+      const { spots } = furnish(new THREE.Group(), room, w - 0.3, d - 0.3, () => (seed = (seed * 16807) % 2147483647) / 2147483647);
+      capacity[room.id] = spots.length;
+      assert.ok(spots.some((sp) => !sp.overflow), `${room.id} : meublée`);
+    }
+  }
+  assert.ok(capacity["f8.aileA"] >= 99 && capacity["f8.aileB"] >= 99, "l'Hôtel loge une centaine de dormeurs par aile");
+  let now = T0;
+  const overflow = [];
+  for (let i = 0; i < 2 * 48; i++) {
+    now += 30 * 60000;
+    advanceWorld(state, now);
+    const occ = {};
+    for (const p of Object.values(world.people)) if (p.location && !["gone", "missing"].includes(p.status)) occ[p.location] = (occ[p.location] || 0) + 1;
+    for (const [room, n] of Object.entries(occ)) if (capacity[room] !== undefined && n > capacity[room]) overflow.push(`${room} ${n}>${capacity[room]}`);
+  }
+  assert.deepEqual(overflow, []);
 });

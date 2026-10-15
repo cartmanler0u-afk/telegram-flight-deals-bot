@@ -31,7 +31,7 @@ import { mediaCycle } from "./media.js";
 import { attachToPlots, plotsFromEvent, plotsCycle, runScheduled, directorCycle, decide, expireDecisions } from "./director.js";
 import { buildReport, eventCategories } from "./report.js";
 import { queueAiJobs } from "./ai.js";
-import { buildingOverview, floorView, roomView, personView, directoryView, newsView, investigationsView, companiesView, politicsView, anomaliesView, historyView, controlCenter, objectView } from "./explore.js";
+import { buildingOverview, floorView, floor3dView, roomView, personView, directoryView, newsView, investigationsView, companiesView, politicsView, anomaliesView, historyView, controlCenter, objectView } from "./explore.js";
 
 export { worldView, personSheet } from "./view.js";
 export { buildingOverview, floorView, roomView, personView, directoryView, newsView, investigationsView, companiesView, politicsView, anomaliesView, historyView, controlCenter, objectView, clock } from "./explore.js";
@@ -804,6 +804,7 @@ export function exploreQuery(state, payload = {}, now = Date.now()) {
   switch (v) {
     case "building": return buildingOverview(world, state, now);
     case "floor": return floorView(world, state, String(payload.id || ""), now);
+    case "floor3d": return floor3dView(world, state, String(payload.id || ""), now);
     case "room": return roomView(world, state, String(payload.id || ""), { page });
     case "person": return personView(world, state, String(payload.id || ""));
     case "object": return objectView(world, String(payload.id || ""));

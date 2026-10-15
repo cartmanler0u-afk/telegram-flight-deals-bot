@@ -400,6 +400,33 @@ carrière.
   politique, anomalies, historique et Centre de contrôle.
 - Aucun écran n'invente rien : tout est construit à partir de l'état réel du monde.
 
+### Visiter les étages en 3D (Ascenseur B)
+
+Dans la mini app, le bouton **🛗** du HUD ouvre l'Ascenseur B : chaque étage du Bâtiment se
+visite en 3D, comme le QG (qui reste l'Étage 11).
+
+- **Le plan est généré à partir des vraies pièces** de l'étage (palier et ascenseurs à l'ouest,
+  couloir central, une porte par pièce) et chaque pièce est meublée selon sa fonction : bureaux,
+  Hémicycle en gradins, salle d'audience avec l'estrade du juge, Cafétéria, Bourse et son
+  bandeau de cours, labos et leurs fioles, studio TV « ON AIR », serres, salle des serveurs,
+  entrepôt, Hôtel « capsule » (près de 100 couchettes par aile), aquarium de Gustave, bureau
+  du Propriétaire et son bouton rouge, cubes flottants du Département -2 et de l'Étage fantôme…
+- **Chaque habitant est là où il est vraiment**, en train de faire ce qu'il fait vraiment
+  (travail, réunion, repas, sieste, file d'attente…). Le juge siège sur l'estrade, le personnel
+  derrière son comptoir. Les dormeurs de l'Hôtel sont dessinés en instances : des centaines
+  de silhouettes pour trois appels de rendu.
+- **Ça bouge pour de vrai** : à chaque nouveau cycle, ceux qui changent de pièce marchent
+  jusqu'à leur nouvelle place, ceux qui quittent l'étage prennent l'ascenseur, ceux qui
+  arrivent en sortent. Entre deux cycles, seuls de petits déplacements dans la même pièce
+  animent la scène (jamais un changement de pièce que le moteur n'a pas décidé).
+- **Bulles** : les répliques réellement prononcées sur l'étage dans les 3 dernières heures
+  du Bâtiment, sinon une pensée tirée de l'activité réelle (« 💭 mélange deux liquides pour
+  voir »). L'éclairage suit l'heure du Bâtiment (fenêtres allumées la nuit).
+- **Navigation** : ▲ ▼ pour changer d'étage, 🏢 QG pour revenir. Toucher une pièce ou un
+  habitant ouvre sa fiche dans le panneau Bâtiment, et inversement : ouvrir un étage, une pièce
+  ou une fiche dans le panneau emmène la caméra au bon endroit. Les étages fermés (Étage
+  fantôme hors de ses nuits) montrent leur palier et se perdent dans le brouillard.
+
 ### Ce que tu peux faire (propriétaire)
 
 Suivre un personnage, organiser une fête ou un séminaire dans une pièce (les invités y vont
@@ -459,6 +486,11 @@ webapp/shared/world/
                connaissance par personnage, propagation, chronique compactée
   explore.js   vues de l'explorateur (sans secrets) ;  report.js  rapport d'absence
   economy.js · politics.js · agents.js · media.js · wtf.js · director.js · ai.js
+webapp/js/scene/
+  floorplan.js plan d'un étage (pièces, portes, murs, chemins), sans three.js
+  floorkit.js  mobilier procédural par type de pièce et places (assises, lits, foule)
+  floors.js    scène 3D d'un étage : habitants réels, dormeurs instanciés, animaux, bulles
+webapp/js/ui/elevator.js   Ascenseur B : choix de l'étage, bandeau, transition, synchro panneau
 src/office/explorer.js     écrans Telegram de l'explorateur
 src/office/building.js     commandes et boutons Telegram du Bâtiment
 webapp/js/ui/madhouse.js   explorateur de la mini app
@@ -504,7 +536,10 @@ qui modifie le monde, relations asymétriques, information privée jamais publiq
 probabilité des événements rares, aucune double application (même instant, même ordre,
 chargement concurrent), parcours bâtiment → étage → pièce → personnage (vues et écrans
 Telegram), permissions du mode test, rapport d'absence chiffré, persistance séparée et
-redémarrage, bail entre deux instances, migration d'une vraie sauvegarde v1.
+redémarrage, bail entre deux instances, migration d'une vraie sauvegarde v1, et pour la 3D :
+plan cohérent de chaque étage (pas de chevauchement, une porte par pièce, chemins), occupants
+affichés = occupants réels (aucune pièce cachée, aucune réplique inventée), et assez de places
+pour que chaque habitant soit visible sur deux jours simulés.
 
 ## Déploiement
 

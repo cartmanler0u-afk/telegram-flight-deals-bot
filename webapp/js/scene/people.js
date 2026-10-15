@@ -324,7 +324,7 @@ export class Person {
     this.root.rotation.y = this.heading;
     this.path = [];
     this.target = spot;
-    this.pose = spot.standing || spot.stand ? "stand" : "sit";
+    this.pose = spot.lie ? "lie" : spot.standing || spot.stand ? "stand" : "sit";
   }
 
   walk(path, target, onArrive = null) {
@@ -359,7 +359,7 @@ export class Person {
         this.heading = lerpAngle(this.heading, Math.atan2(dx, dz), Math.min(1, dt * 10));
       }
       if (!this.path.length) {
-        this.pose = this.target && !this.target.standing && !this.target.stand ? "sit" : "stand";
+        this.pose = this.target?.lie ? "lie" : this.target && !this.target.standing && !this.target.stand ? "sit" : "stand";
         if (this.target) {
           // Dernier pas jusqu'au point exact (tapis de course, pouf…), éventuellement surélevé.
           p.x = this.target.x;
@@ -386,7 +386,14 @@ export class Person {
     let headX = 0, headY = 0;
     let torsoX = 0;
 
-    if (this.pose === "walk") {
+    let lying = false;
+    if (this.pose === "lie") {
+      // Allongé (lits de l'Hôtel) : le corps pivote autour des pieds, la tête vers l'arrière.
+      lying = true;
+      bodyY = (this.target?.lieY ?? 0.62) + Math.sin(ph * 1.1) * 0.006;
+      armLx = armRx = -0.05;
+      headX = -0.15;
+    } else if (this.pose === "walk") {
       const s = Math.sin(ph * 9);
       thighL = s * 0.55;
       thighR = -s * 0.55;
@@ -563,6 +570,7 @@ export class Person {
     }
 
     body.position.y = bodyY;
+    body.rotation.x = lying ? -Math.PI / 2 : 0;
     legL.hip.rotation.x = thighL;
     legR.hip.rotation.x = thighR;
     legL.knee.rotation.x = kneeL;

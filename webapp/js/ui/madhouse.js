@@ -289,14 +289,35 @@ function debugPanel(ctx, refresh) {
 
 // ------------------------------------------------------------------ panneau
 
+// Ouverture du panneau sur un écran précis (clic sur une pièce ou un habitant dans la 3D).
+let pendingRoute = null;
+let activeNav = null;
+export function openMadhouseAt(panels, route) {
+  // Panneau déjà ouvert : on y navigue ; sinon il s'ouvrira directement sur cet écran.
+  if (panels.current?.id === "madhouse" && activeNav?.alive()) activeNav.go(route);
+  else pendingRoute = route;
+  panels.openPanel("madhouse");
+}
+
+// Annonce à la 3D l'étage (et la pièce ou la personne) affiché dans le panneau.
+function announce(route, data) {
+  if (!data) return;
+  let detail = null;
+  if (route.view === "floor") detail = { floor: data.id };
+  else if (route.view === "room") detail = { floor: data.floor.id, room: data.id };
+  else if (route.view === "person" && data.location) detail = { floor: data.location.id.split(".")[0], room: data.location.id, person: data.id };
+  if (detail) window.dispatchEvent(new CustomEvent("madhouse:view", { detail }));
+}
+
 const madhouse = {
   subtitle: (state) => {
     const b = state.madhouse;
     return b ? `Cycle ${b.cycle} · humeur ${b.mood}/100 · pression ${b.pressure}/100${b.decisions ? ` · ${b.decisions} décision(s)` : ""}` : "";
   },
   mount(body, ctx) {
-    let tab = "explore";
-    let route = { view: "building" };
+    let tab = TABS.some(([id]) => id === pendingRoute?.view) ? pendingRoute.view : "explore";
+    let route = pendingRoute || { view: "building" };
+    pendingRoute = null;
     const stack = [];
     let loadedCycle = -1;
     let seq = 0;
@@ -337,8 +358,14 @@ const madhouse = {
         return;
       }
       if (mine !== seq) return;
+      const announced = loadedCycle === -1 || route !== lastAnnounced;
       loadedCycle = ctx.state().madhouse?.cycle ?? loadedCycle;
       renderCrumbs(data);
+      // Seulement quand on change d'écran (pas à chaque rafraîchissement de cycle).
+      if (announced) {
+        lastAnnounced = route;
+        announce(route, data);
+      }
       const refresh = () => load();
       let nodes;
       switch (route.view) {
@@ -367,6 +394,8 @@ const madhouse = {
       }
       clear(content, ...nodes.filter(Boolean));
     }
+    let lastAnnounced = null;
+    activeNav = { go: (next) => nav(next), alive: () => content.isConnected };
     load();
     return {
       update(state) {
