@@ -501,6 +501,120 @@ export const TEMPLATES = [
       };
     },
   },
+  // ---------------------------------------------------------------- légendaires (extrêmement rares)
+  // Des journées qui changent le Bâtiment : chacune modifie vraiment la simulation pendant
+  // plusieurs heures (déplacements, éclairage, accès) et se termine par un événement de fin.
+  {
+    id: "elevator_strike", tier: "legendary", p: 0.15, cooldown: 30 * DAYC, hours: [7, 10],
+    cast(cx) {
+      const w = cx.world;
+      if (w.flags.elevatorStrike?.until > w.cycle || w.building.elevator.mood > 35) return null;
+      const waiting = [...humans(cx.occupancy?.["f0.palier"]), ...humans(cx.occupancy?.["f0.ascenseurs"]), ...humans(cx.occupancy?.["f0.hall"])];
+      return { witness: cx.rng.pick(waiting) || null };
+    },
+    run(cx, { witness }) {
+      const { world, rng } = cx;
+      const duration = rng.int(16, 28);
+      const demand = rng.pick(["un miroir propre et des « bonjour » sincères", "le droit de choisir la musique d'attente", "une prime de risque pour l'Étage 10", "qu'on arrête d'appuyer trois fois sur le bouton"]);
+      return {
+        ops: [{ op: "schedule", dueCycle: world.cycle + duration, kind: "elevator_strike_end", payload: {} }, { op: "building", pressure: 8 }],
+        mutate: () => {
+          world.flags.elevatorStrike = { since: world.cycle, until: world.cycle + duration, stuck: 0, demand };
+        },
+        event: { kind: "elevator_strike", title: "L'Ascenseur B se met en grève", text: `Un écriteau apparaît sur ses portes : « EN GRÈVE — revendications : ${demand} ». Pendant environ ${Math.round(duration / 2)} heures, il faudra prendre l'escalier : au-delà de trois étages, personne ne s'y risque. Les étages du haut deviennent des îles.`, actors: [witness?.id].filter(Boolean), room: "f0.ascenseurs", tags: ["ascenseur", "bâtiment", "grève"], dialogue: witness ? [say(cx, witness.id, "elevator")].filter(Boolean) : [] },
+      };
+    },
+  },
+  {
+    id: "building_party", tier: "legendary", p: 0.2, cooldown: 30 * DAYC, hours: [18, 21],
+    cast(cx) {
+      const w = cx.world;
+      if (w.mood < 68 || ![5, 6].includes(cx.weekday) || w.flags.party?.until > w.cycle) return null;
+      const guests = Object.values(w.people).filter((p) => awake(p) && p.kind !== "animal" && p.status === "active");
+      return guests.length >= 30 ? { guests } : null;
+    },
+    run(cx, { guests }) {
+      const { world, rng } = cx;
+      const duration = 6;
+      const invited = rng.shuffle(guests).slice(0, 120); // le Hall a ses limites (et ses habitués)
+      const dj = invited.find((p) => p.traits?.includes("party")) || invited[0];
+      const budget = Math.min(900, Math.floor(balance(world, "treasury") * 0.05));
+      const buffet = budget >= 50 && world.companies.refectoire?.status === "active";
+      return {
+        ops: [
+          ...invited.map((p) => goTo(p, "f0.hall", duration, "Fête du Bâtiment", world)),
+          ...(buffet ? [{ op: "transfer", from: "treasury", to: accountOf("c", "refectoire"), amount: budget, reason: "Buffet de la Fête du Bâtiment" }] : []),
+          { op: "building", mood: 6, pressure: -10 },
+          { op: "schedule", dueCycle: world.cycle + duration, kind: "gathering_end", payload: { room: "f0.hall", label: "la Fête du Bâtiment", guests: invited.map((p) => p.id) } },
+        ],
+        mutate: () => {
+          world.flags.party = { room: "f0.hall", until: world.cycle + duration, host: dj.id, theme: "Fête du Bâtiment", legendary: true };
+        },
+        event: { kind: "building_party", title: "LA FÊTE DU BÂTIMENT : tout le monde descend au Hall", text: `Personne ne sait qui l'a lancée. ${invited.length} habitants descendent au Hall des Pas Perdus, ${dj.name} s'improvise DJ et Gustave a droit à une boule à facettes${buffet ? `. Le Syndic paie le buffet du Réfectoire (${credits(budget)})` : ""}.`, actors: [...new Set([dj.id, ...invited.slice(0, 3).map((p) => p.id)])], room: "f0.hall", tags: ["fête", "vie sociale", "bâtiment"], dialogue: [say(cx, dj.id, "party")].filter(Boolean) },
+      };
+    },
+  },
+  {
+    id: "blackout", tier: "legendary", p: 0.15, cooldown: 30 * DAYC, hours: [9, 19],
+    cast(cx) {
+      const w = cx.world;
+      if (w.flags.blackout?.until > w.cycle) return null;
+      return w.building.pressure >= 35 || w.objects?.["o-cafe"]?.state === "en panne" ? {} : null;
+    },
+    run(cx) {
+      const { world, rng } = cx;
+      const duration = rng.int(5, 10);
+      const cause = rng.pick(["un grille-pain branché sur le serveur central", "la chaufferie, qui a « consommé un étage de trop »", "une expérience des Laboratoires baptisée « Projet Lumière »", "personne : le Bâtiment a simplement soupiré"]);
+      const tech = rng.pick(Object.values(world.people).filter((p) => p.dept === "technique" && p.status === "active"));
+      const cafe = world.objects?.["o-cafe"];
+      return {
+        ops: [{ op: "schedule", dueCycle: world.cycle + duration, kind: "blackout_end", payload: { tech: tech?.id || null } }, { op: "building", pressure: -12 }, ...(cafe && cafe.state !== "en panne" ? [{ op: "object", id: "o-cafe", set: { state: "en panne" }, note: "Panne générale." }] : [])],
+        mutate: () => {
+          world.flags.blackout = { since: world.cycle, until: world.cycle + duration, cause };
+        },
+        event: { kind: "blackout", title: "Panne générale : le Bâtiment plonge dans le noir", text: `Cause probable : ${cause}. Les écrans s'éteignent, l'Ascenseur B s'arrête et chacun continue à la lampe de poche.${tech ? ` ${tech.name} descend à la chaufferie avec un tournevis et beaucoup d'espoir.` : ""}`, actors: [tech?.id].filter(Boolean), room: "f12.chaufferie", tags: ["bâtiment", "panne"] },
+      };
+    },
+  },
+  {
+    id: "ghost_day", tier: "legendary", p: 0.2, cooldown: 45 * DAYC, hours: [9, 11],
+    cast(cx) {
+      const w = cx.world;
+      if (!w.building.floors[GHOST_FLOOR]?.discovered || isGhostOpen(w)) return null;
+      const visitor = cx.rng.pick(Object.values(w.people).filter((p) => awake(p) && p.kind !== "animal" && p.status === "active" && (p.ambition?.kind === "truth" || (p.skills?.investigation || 0) >= 7)));
+      return visitor ? { visitor } : null;
+    },
+    run(cx, { visitor }) {
+      const { world, rng } = cx;
+      const duration = 24;
+      const rooms = roomsOfFloor(world, GHOST_FLOOR).filter((r) => r.access === "ghost" && r.kind !== "transit");
+      if (!rooms.length) return null;
+      const archives = rooms.find((r) => r.id === `${GHOST_FLOOR}.lendemain`) || rooms[0];
+      const tourists = rng.shuffle(Object.values(world.people).filter((p) => awake(p) && p.kind !== "animal" && p.status === "active" && p.id !== visitor.id)).slice(0, rng.int(5, 10));
+      const deputy = rng.pick(world.parliament.seats.map((id) => world.people[id]).filter(Boolean));
+      const prophecy = rng.pick([
+        deputy ? `le nom de ${deputy.name} y est entouré trois fois à l'encre rouge` : "une page entière y est raturée « par précaution »",
+        "une note de service y annonce une réunion « pour préparer la réunion d'hier »",
+        "le Hall y est décrit comme « plein à craquer, comme prévu »",
+        "l'Ascenseur B y est noté « de bonne humeur », suivi d'un point d'interrogation",
+      ]);
+      return {
+        ops: [
+          { op: "floor", id: GHOST_FLOOR, set: { discovered: true }, anomaly: 15 },
+          goTo(visitor, archives.id, 4, "Le Jour du Lendemain", world),
+          ...tourists.map((p) => goTo(p, rng.pick(rooms).id, rng.int(2, 6), "Curiosité (Étage fantôme en plein jour)", world)),
+          { op: "schedule", dueCycle: world.cycle + duration, kind: "ghost_close", payload: {} },
+          { op: "building", pressure: -20 },
+        ],
+        mutate: () => {
+          world.flags.ghostOpenUntil = world.cycle + duration + 1;
+        },
+        // Une prophétie reste une hypothèse : rien ne garantit qu'elle se réalise.
+        facts: [{ kind: "prophecy", text: `Dossier daté de demain, rapporté de l'Étage fantôme par ${visitor.name} : ${prophecy}.`, about: [visitor.id], status: "hypothesis", truth: null, public: true }],
+        event: { kind: "ghost_day", title: "Le Jour du Lendemain : l'Étage fantôme ouvre en plein jour", text: `Pour la première fois, l'Ascenseur B affiche « 10 » à l'heure du café, et le reste toute la journée. ${visitor.name} monte aux Archives du Lendemain et redescend avec un dossier daté de demain. ${tourists.length} curieux montent voir.`, actors: [visitor.id, ...tourists.slice(0, 2).map((p) => p.id)], room: `${GHOST_FLOOR}.palier`, tags: ["anomalie", "étage fantôme", "prophétie"] },
+      };
+    },
+  },
 ];
 
 // ------------------------------------------------------------------ moteur

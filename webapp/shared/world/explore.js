@@ -206,6 +206,7 @@ export function floor3dView(world, state, floorId, now = Date.now()) {
       star: !!p.star,
       followed: follows.has(p.id),
       atWork: p.workRoom === p.location,
+      party: !!(p.flags?.goTo?.until > world.cycle && /fête/i.test(p.flags.goTo.reason || "")),
       influence: p.influence || 0,
     });
   }
@@ -237,6 +238,9 @@ export function floor3dView(world, state, floorId, now = Date.now()) {
     clock: c.label,
     hour: c.hour,
     elevator: world.building.elevator.mood,
+    // Journées légendaires en cours (affichées telles quelles par la 3D).
+    blackout: world.flags.blackout?.until > world.cycle,
+    strike: world.flags.elevatorStrike?.until > world.cycle,
     rooms: rooms.map((r) => ({
       id: r.id,
       key: r.id.split(".")[1],

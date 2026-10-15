@@ -148,6 +148,7 @@ async function boot() {
       // Le panneau Bâtiment accompagne la visite des étages ; tout autre panneau ramène au QG.
       const madhouse = panel.kind === "panel" && panel.id === "madhouse";
       if (world?.inFloor && !madhouse) elevator?.leave();
+      elevator?.onSheet(true);
       if (!world?.inFloor) {
         if (panel.kind === "panel") world?.focusPanel(panel.id, true);
         else world?.focusAgent(panel.id, true);
@@ -157,6 +158,7 @@ async function boot() {
     },
     onClose: () => {
       world?.clearSelection();
+      elevator?.onSheet(false);
       renderDock();
       syncBackButton();
     },
@@ -233,6 +235,7 @@ async function boot() {
 
   // ---- Ascenseur B : visite des autres étages en 3D
   if (world) {
+    document.body.classList.add("has-3d");
     elevator = createElevator({
       backend,
       getWorld: () => world,

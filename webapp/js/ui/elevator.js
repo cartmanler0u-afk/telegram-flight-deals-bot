@@ -32,6 +32,11 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
   banner = h("div", { id: "floor-banner", hidden: true });
   document.body.append(banner);
 
+  // Suivi d'un habitant : la caméra le garde au centre et prend l'ascenseur avec lui.
+  let following = null; // { id, name, info }
+  const pill = h("div", { id: "follow-pill", hidden: true });
+  document.body.append(pill);
+
   const query = (payload) => backend.query("world.explore", payload);
   const levelOf = (id) => floors.find((f) => f.id === id)?.level ?? (id === QG_FLOOR ? 11 : "?");
 
@@ -63,13 +68,16 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
       h("button", { class: "fb-btn", disabled: !up, title: up ? `Monter : ${up.short}` : "", onClick: () => up && goTo(up.id) }, "▲"),
       h("button", { class: "fb-main", title: "Ouvrir la fiche de l'étage", onClick: () => onOpenRoute?.({ view: "floor", id: current }) },
         h("span", { class: "fb-level" }, String(data.level)),
-        h("span", { class: "fb-text" }, h("b", {}, data.short), h("span", { class: "fb-sub" }, `${people} 👥 · ${data.clock}${data.access ? ` · 🔒 ${data.access}` : ""}`))),
+        h("span", { class: "fb-text" }, h("b", {}, data.short), h("span", { class: "fb-sub" }, `${people} 👥 · ${data.clock}${data.access ? ` · 🔒 ${data.access}` : ""}${data.blackout ? " · ⚡ panne générale" : ""}${data.strike ? " · 🛗 ascenseur en grève" : ""}`))),
       h("button", { class: "fb-btn", disabled: !down, title: down ? `Descendre : ${down.short}` : "", onClick: () => down && goTo(down.id) }, "▼"),
       h("button", { class: "fb-btn fb-home", title: "Retour à ton QG (Étage 11)", onClick: () => goTo(QG_FLOOR) }, "🏢 QG"));
     banner.hidden = false;
   }
 
   function line(data) {
+    // Journées légendaires : l'ascenseur ne roule pas, le propriétaire passe par l'escalier de service.
+    if (data.strike) return "L'Ascenseur B est en grève. Tu montes par l'escalier de service.";
+    if (data.blackout) return "Panne générale : tu montes à la lampe de poche.";
     const pool = data.elevator >= 60 ? LINES.good : data.elevator >= 35 ? LINES.meh : LINES.bad;
     return pool[Math.floor(Math.random() * pool.length)].replace("{n}", data.level).replace("{short}", data.short);
   }
@@ -89,15 +97,16 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
   }
 
   // Va à un étage (et, si demandé, centre la vue sur une pièce ou une personne).
-  async function goTo(floorId, { room = null, person = null, sheet = false, transition = true } = {}) {
+  async function goTo(floorId, { room = null, person = null, sheet = false, transition = true, byFollow = false, arriving = null, text = null } = {}) {
     const world = getWorld();
     if (!world || busy) return;
+    if (following && !byFollow) stopFollow(); // l'utilisateur reprend la main
     if (!floors.length) await loadFloors();
     if (floorId === QG_FLOOR) {
       if (current === QG_FLOOR) return;
       busy = true;
       try {
-        await doors("Étage 11 — Ton QG", async () => world.leaveFloor());
+        await doors(text || "Étage 11 — Ton QG", async () => world.leaveFloor());
       } finally {
         busy = false;
       }
@@ -115,8 +124,8 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
       lastCycle = data.cycle;
       lastFetch = Date.now();
       if (same) world.updateFloor(data);
-      else if (transition) await doors(`Étage ${data.level} — ${data.short}\n« ${line(data)} »`, async () => world.enterFloor(data));
-      else world.enterFloor(data);
+      else if (transition) await doors(text ? `${text}\nÉtage ${data.level} — ${data.short}` : `Étage ${data.level} — ${data.short}\n« ${line(data)} »`, async () => world.enterFloor(data, { arriving }));
+      else world.enterFloor(data, { arriving });
       current = floorId;
       renderChip();
       renderBanner(data);
@@ -141,9 +150,84 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
       lastFetch = Date.now();
       world.updateFloor(data);
       renderBanner(data);
+      if (following) {
+        const me = data.people.find((p) => p.id === following.id);
+        if (me) {
+          following.info = `${me.label} · ${data.rooms.find((r) => r.id === me.room)?.name || ""}`;
+          renderFollow();
+        } else {
+          // Il a quitté l'étage : on le regarde rejoindre l'ascenseur, puis on monte avec lui.
+          following.info = "prend l'ascenseur…";
+          renderFollow();
+          setTimeout(() => track(), 3500);
+        }
+      }
     } catch {
       // nouvel essai au prochain cycle
     }
+  }
+
+  function renderFollow() {
+    if (!following) {
+      pill.hidden = true;
+      return;
+    }
+    clear(pill,
+      h("span", { class: "fp-cam" }, "🎥"),
+      h("button", { class: "fp-main", title: "Ouvrir sa fiche", onClick: () => onOpenRoute?.({ view: "person", id: following.id }) },
+        h("b", {}, following.name || "…"),
+        h("span", { class: "fp-sub" }, following.info || "")),
+      h("button", { class: "fp-stop", title: "Arrêter de suivre", "aria-label": "Arrêter de suivre", onClick: () => stopFollow() }, "✕"));
+    pill.hidden = false;
+  }
+
+  function stopFollow() {
+    following = null;
+    getWorld()?.stopFollow();
+    renderFollow();
+  }
+
+  async function follow(id) {
+    if (!getWorld()) return;
+    following = { id, name: null, info: "" };
+    renderFollow();
+    await track({ first: true });
+  }
+
+  // Où est vraiment la personne suivie ? La caméra la rejoint (en ascenseur si besoin).
+  async function track({ first = false } = {}) {
+    const world = getWorld();
+    if (!following || !world) return;
+    let p = null;
+    try {
+      p = await query({ view: "person", id: following.id });
+    } catch {
+      p = null;
+    }
+    if (!following) return;
+    if (!p) {
+      following.info = "introuvable";
+      return renderFollow();
+    }
+    following.name = p.name;
+    following.info = p.location ? `${p.activity} · ${p.location.name}` : p.activity;
+    if (!p.location) {
+      world.stopFollow(); // disparu (Étage fantôme…) : on ne filme pas ce qui n'existe pas
+      return renderFollow();
+    }
+    const floor = p.location.id.split(".")[0];
+    if (floor === QG_FLOOR) {
+      following.info += " (ton QG)";
+      if (current !== QG_FLOOR) await goTo(QG_FLOOR, { byFollow: true, text: first ? null : `Tu suis ${p.name} dans l'ascenseur…\nÉtage 11 — Ton QG` });
+      world.focusAgent?.(following.id, false);
+      return renderFollow();
+    }
+    if (floor !== current || !world.inFloor) {
+      await goTo(floor, { byFollow: true, arriving: first ? null : following.id, text: first ? null : `Tu suis ${p.name} dans l'ascenseur…` });
+    }
+    if (!following) return;
+    world.followPerson(following.id, document.body.classList.contains("sheet-open"));
+    renderFollow();
   }
 
   async function openPicker() {
@@ -167,6 +251,8 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
     // Le panneau Bâtiment a ouvert un étage, une pièce ou une fiche : la 3D suit.
     const { floor, room, person } = e.detail || {};
     if (!floor) return;
+    if (following && person === following.id) return; // la caméra le suit déjà
+    if (following) stopFollow();
     const world = getWorld();
     if (!world) return;
     if (floor === QG_FLOOR) {
@@ -174,6 +260,10 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
       return;
     }
     goTo(floor, { room, person, sheet: true, transition: current !== floor });
+  });
+
+  window.addEventListener("madhouse:follow", (e) => {
+    if (e.detail?.id) follow(e.detail.id);
   });
 
   setInterval(() => {
@@ -193,7 +283,15 @@ export function createElevator({ backend, getWorld, onOpenRoute }) {
       const cycle = state.madhouse?.cycle;
       if (cycle !== undefined && lastCycle !== null && cycle !== lastCycle) refresh();
     },
+    get following() {
+      return following?.id || null;
+    },
+    // Le panneau s'ouvre ou se ferme : le cadrage du suivi s'adapte.
+    onSheet(open) {
+      if (following) getWorld()?.followSheet(open);
+    },
     leave() {
+      if (following) stopFollow();
       if (current === QG_FLOOR) return;
       getWorld()?.leaveFloor();
       current = QG_FLOOR;

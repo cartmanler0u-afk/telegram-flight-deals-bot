@@ -320,6 +320,7 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0, devTools = 
     else if (key === "events") payload.maxEventsPerCycle = a;
     else if (key === "speed") payload.timeScale = a;
     else if (key === "rare") Object.assign(payload, { rarity_rare: a, rarity_very_rare: a, rarity_legendary: a });
+    else if (key === "legendary") payload.rarity_legendary = a;
     else if (key === "dialogue") payload.dialogue = a;
     try {
       const res = Object.keys(payload).length ? office.runtime.dispatch("world.config", payload).public : { config: office.runtime.state.world.config };
@@ -332,7 +333,7 @@ export function registerBuilding(bot, { service, isAdmin, aiCap = 0, devTools = 
           `IA narrative : ${c.ai.enabled && c.ai.available ? "activée" : "désactivée"} · ${c.ai.dailyCalls} appel(s)/jour max (plafond opérateur : ${aiCap})`,
           `Notifications : importance ≥ ${c.notify.minImportance}, ${c.notify.maxPerDay}/jour max, ${c.notify.minGapMinutes} min d'écart, silence ${c.notify.quietStart}h–${c.notify.quietEnd}h · rapport quotidien ${c.notify.dailyReport ? `à ${c.notify.reportHour}h` : "désactivé"}`,
           "",
-          "<i>/madhouse_config chaos 70 · population 300 · events 6 · rare 2 · speed 2 · dialogue riche · cycle 30 · pause · resume · ai on|off · ai_calls 5 · notif 2 · importance 4 · quiet 23 8 · report 9 on|off</i>",
+          "<i>/madhouse_config chaos 70 · population 300 · events 6 · rare 2 · legendary 0.5 · speed 2 · dialogue riche · cycle 30 · pause · resume · ai on|off · ai_calls 5 · notif 2 · importance 4 · quiet 23 8 · report 9 on|off</i>",
         ].join("\n"),
         HTML
       );

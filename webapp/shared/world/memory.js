@@ -14,7 +14,13 @@ import { logInRoom } from "./building.js";
 // Au-delà de ce nombre de personnes informées, une rumeur est « de notoriété publique ».
 export const WIDESPREAD = 60;
 
-export const LIMITS = { events: 450, facts: 420, chronicleDays: 90, linesPerDay: 18, memories: 14, ledger: 300, appliedKeys: 2500, relations: 1800, metrics: 24 * 8 };
+export const LIMITS = { events: 450, facts: 420, chronicleDays: 90, linesPerDay: 12, memories: 14, ledger: 300, appliedKeys: 2500, relations: 1800, metrics: 24 * 8, beliefs: 12, closedPlots: 30, closedArcs: 20, closedMysteries: 8, judgedCases: 25, deadLaws: 15, createdObjects: 40 };
+
+// Ne garde que les `keep` éléments clos les plus récents d'une collection (les ouverts restent tous).
+function pruneClosed(store, isClosed, recency, keep, protect = () => false) {
+  const closed = Object.values(store || {}).filter((x) => isClosed(x) && !protect(x)).sort((a, b) => recency(b) - recency(a));
+  for (const x of closed.slice(keep)) delete store[x.id];
+}
 
 // ------------------------------------------------------------------ faits
 
@@ -221,6 +227,24 @@ export function compact(world) {
   if ((world.metrics || []).length > LIMITS.metrics) world.metrics.splice(0, world.metrics.length - LIMITS.metrics);
   const keys = Object.keys(world.applied);
   if (keys.length > LIMITS.appliedKeys) for (const k of keys) if (world.cycle - world.applied[k] > 30 * 48) delete world.applied[k];
+
+  // Croyances et connaissances qui pointent vers des faits oubliés ; consignes de déplacement expirées.
+  for (const p of Object.values(world.people)) {
+    if (p.beliefs?.length) p.beliefs = p.beliefs.filter((b) => world.facts[b.fact]).slice(-LIMITS.beliefs);
+    if (p.knows?.length) p.knows = p.knows.filter((id) => world.facts[id]);
+    if (p.flags?.goTo && !(p.flags.goTo.until > world.cycle)) delete p.flags.goTo;
+  }
+  // Affaires closes : on garde les plus récentes (le reste vit dans la chronique et les carrières).
+  pruneClosed(world.plots, (x) => !["active", "dormant"].includes(x.state), (x) => x.lastBeatCycle ?? x.createdCycle ?? 0, LIMITS.closedPlots);
+  const latestArc = {};
+  for (const a of Object.values(world.arcs || {})) if (!latestArc[a.kind] || a.startedCycle > latestArc[a.kind].startedCycle) latestArc[a.kind] = a;
+  pruneClosed(world.arcs, (x) => !["active", "dormant"].includes(x.state), (x) => x.lastCycle ?? x.startedCycle ?? 0, LIMITS.closedArcs, (x) => latestArc[x.kind] === x);
+  pruneClosed(world.mysteries, (x) => x.status !== "open", (x) => x.solvedCycle ?? x.openedCycle ?? 0, LIMITS.closedMysteries);
+  pruneClosed(world.cases, (x) => x.status === "judged" || x.status === "closed", (x) => x.judgedCycle ?? x.filedCycle ?? 0, LIMITS.judgedCases);
+  pruneClosed(world.laws, (x) => ["rejected", "repealed", "annulled"].includes(x.status), (x) => x.cycle ?? x.votedCycle ?? 0, LIMITS.deadLaws);
+  // Objets apparus en cours de route : les plus anciens finissent aux objets trouvés… puis à la benne.
+  const busy = JSON.stringify([Object.values(world.arcs || {}).filter((a) => ["active", "dormant"].includes(a.state)), Object.values(world.mysteries).filter((m) => m.status === "open")]);
+  pruneClosed(world.objects, (o) => o.createdCycle !== undefined && world.cycle - o.createdCycle > 14 * 48, (o) => o.createdCycle, LIMITS.createdObjects, (o) => busy.includes(o.id));
 
   const facts = Object.values(world.facts);
   if (facts.length > LIMITS.facts) {

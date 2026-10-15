@@ -185,8 +185,10 @@ export function quip(world, rng, speakerId, situation, { a = speakerId, b = null
   if (!force && !rng.chance(humor.rate ?? 0.3)) return null;
   const pool = QUIPS[situation] || QUIPS.generic;
   const matching = pool.filter(([, tags]) => tags.some((t) => humor.tags?.includes(t)));
-  const [template] = rng.pick(matching.length ? matching : pool);
-  let line = fill(template, { a: firstName(world, a), b: b ? firstName(world, b) : "quelqu'un", x });
+  const [picked] = rng.pick(matching.length ? matching : pool);
+  // La réplique est attribuée à `speakerId` : le nom en tête est donc toujours le sien.
+  const template = picked.replace(/^\{[ab]\} : /, "{s} : ");
+  let line = fill(template, { s: firstName(world, speakerId), a: firstName(world, a), b: b ? firstName(world, b) : "quelqu'un", x });
   // Le locuteur réel remplace {a} quand la réplique commence par son prénom : on garde le texte tel quel.
   if (rng.chance(0.3)) {
     if (humor.refs === "fan") line += ` ${rng.pick(REFS[rng.pick(humor.tags?.length ? humor.tags : ["sitcom"])] || REFS.sitcom)}`;

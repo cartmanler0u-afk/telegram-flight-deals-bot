@@ -374,9 +374,20 @@ carrière.
 - **Interactions de proximité** : seuls les gens **dans la même pièce** se parlent, se
   disputent, se confient un secret, se transmettent une rumeur (crue, mise en doute ou
   exploitée). Une information privée ne devient publique que si elle se propage vraiment.
-- **Événements probabilistes** : 25 modèles (14 courants, 8 rares, 3 très rares) avec
-  préconditions, heures, temps de recharge et probabilité réglable (chaos, multiplicateurs
-  de rareté). 8 **arcs systémiques** sur plusieurs jours (la caisse noire, le portrait qui
+- **Événements probabilistes** : 29 modèles (14 courants, 8 rares, 3 très rares,
+  4 légendaires) avec préconditions, heures, temps de recharge et probabilité réglable (chaos,
+  multiplicateurs de rareté).
+- **Journées légendaires** (environ une par mois de simulation, chacune change vraiment le
+  Bâtiment pendant des heures, puis se termine par un événement de fin) :
+  - **La grève de l'Ascenseur B** : escalier seulement, personne ne monte plus de trois
+    étages à pied ; les habitants des étages lointains restent coincés.
+  - **La Fête du Bâtiment** (vendredi ou samedi soir, si l'ambiance est bonne) : jusqu'à
+    120 habitants descendent au Hall ; liens créés, buffet payé par le Syndic.
+  - **La panne générale** : les bureaux se vident vers les lieux éclairés, tout le monde
+    passe à la lampe de poche, le distributeur de café tombe en panne (pour longtemps).
+  - **Le Jour du Lendemain** : l'Étage fantôme ouvre en plein jour ; un curieux en rapporte un
+    dossier daté de demain (une hypothèse, jamais présentée comme un fait), et ceux qui y
+    traînent à la fermeture disparaissent. 8 **arcs systémiques** sur plusieurs jours (la caisse noire, le portrait qui
   disparaît, le syndicat des pigeons, les colis volatilisés, le séminaire de cohésion, la
   machine à café, la photo compromettante, le vice-président de quelque chose) avec étapes,
   indices, conséquences et dénouements.
@@ -422,6 +433,12 @@ visite en 3D, comme le QG (qui reste l'Étage 11).
 - **Bulles** : les répliques réellement prononcées sur l'étage dans les 3 dernières heures
   du Bâtiment, sinon une pensée tirée de l'activité réelle (« 💭 mélange deux liquides pour
   voir »). L'éclairage suit l'heure du Bâtiment (fenêtres allumées la nuit).
+- **Journées légendaires en 3D** : noir presque complet pendant la panne, palier « Ascenseur B
+  EN GRÈVE », danse et boule à facettes pendant la Fête du Bâtiment.
+- **🎥 Suivre en 3D** (fiche d'un habitant) : la caméra garde la personne au centre ; quand la
+  simulation l'emmène ailleurs, on la regarde rejoindre l'ascenseur, on monte avec elle et on
+  la voit sortir de la cabine à son nouvel étage. Le bandeau indique en continu ce qu'elle fait
+  et où.
 - **Navigation** : ▲ ▼ pour changer d'étage, 🏢 QG pour revenir. Toucher une pièce ou un
   habitant ouvre sa fiche dans le panneau Bâtiment, et inversement : ouvrir un étage, une pièce
   ou une fiche dans le panneau emmène la caméra au bon endroit. Les étages fermés (Étage
@@ -454,7 +471,8 @@ des Actus de la mini app.
 /madhouse_config population 300        population cible (les nouveaux arrivent par petits groupes)
 /madhouse_config chaos 70              0 = calme plat, 100 = chaos total
 /madhouse_config events 6              événements max par cycle
-/madhouse_config rare 2                multiplicateur des événements rares / très rares
+/madhouse_config rare 2                multiplicateur des événements rares / très rares / légendaires
+/madhouse_config legendary 0.5         multiplicateur des seules journées légendaires
 /madhouse_config speed 2               vitesse du temps simulé
 /madhouse_config dialogue riche        niveau de détail des dialogues
 /madhouse_config cycle 30 · pause · resume · ai on|off · ai_calls 5
@@ -539,7 +557,8 @@ Telegram), permissions du mode test, rapport d'absence chiffré, persistance sé
 redémarrage, bail entre deux instances, migration d'une vraie sauvegarde v1, et pour la 3D :
 plan cohérent de chaque étage (pas de chevauchement, une porte par pièce, chemins), occupants
 affichés = occupants réels (aucune pièce cachée, aucune réplique inventée), et assez de places
-pour que chaque habitant soit visible sur deux jours simulés.
+pour que chaque habitant soit visible sur deux jours simulés ; journées légendaires (rareté,
+effets réels, fin), et mémoire bornée (affaires closes, croyances orphelines élaguées).
 
 ## Déploiement
 

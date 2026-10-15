@@ -548,3 +548,18 @@ details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; }
 .floor-closed { background: rgba(40, 20, 60, 0.92); border-color: #9b7bff; pointer-events: none; }
 .floor-elevator { font-size: 11px; pointer-events: none; }
 .floor-elevator .small { font-weight: 600; color: var(--muted); }
+
+/* Suivi d'un habitant en 3D */
+#follow-pill {
+  position: fixed; top: calc(112px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 10;
+  display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px; border-radius: 999px; max-width: calc(100vw - 24px);
+  background: rgba(40, 24, 64, 0.92); border: 1px solid rgba(155, 123, 255, 0.6); box-shadow: var(--shadow);
+}
+#follow-pill[hidden] { display: none; }
+.fp-cam { font-size: 15px; animation: rec-blink 1.6s infinite; }
+@keyframes rec-blink { 50% { opacity: 0.35; } }
+.fp-main { display: flex; flex-direction: column; min-width: 0; border: 0; background: transparent; text-align: left; padding: 2px 4px; }
+.fp-main b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62vw; }
+.fp-stop { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--card-strong); }
+@media (min-width: 900px) { body.sheet-open #follow-pill { left: calc(50% - 232px); } }

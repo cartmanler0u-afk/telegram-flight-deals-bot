@@ -412,7 +412,7 @@ export class World {
   }
 
   // Affiche un étage (données réelles du monde) à la place du QG, avec le même rendu et la même caméra.
-  enterFloor(data) {
+  enterFloor(data, { arriving = null } = {}) {
     if (this.floor?.id === data.id) {
       this.floor.apply(data);
       return;
@@ -420,7 +420,7 @@ export class World {
     const savedView = this.floor ? this.savedView : { target: this.controls.target.clone(), position: this.camera.position.clone() };
     this.disposeFloor();
     this.savedView = savedView;
-    this.floor = new FloorScene(data, { onSelectRoom: (id) => this.onFloorRoom?.(id), onSelectPerson: (id) => this.onFloorPerson?.(id) });
+    this.floor = new FloorScene(data, { onSelectRoom: (id) => this.onFloorRoom?.(id), onSelectPerson: (id) => this.onFloorPerson?.(id), arriving });
     if (!this.floorLabels) {
       this.floorLabels = new CSS2DRenderer();
       this.floorLabels.domElement.className = "label-layer floor-labels";
@@ -454,6 +454,7 @@ export class World {
   disposeFloor() {
     this.floor?.dispose();
     this.floor = null;
+    this.followShift = null;
   }
 
   focusFloorRoom(roomId, sheet = true) {
@@ -461,6 +462,27 @@ export class World {
     if (!c) return;
     this.floor.select(null);
     this.flyTo(this.viewFor(c, 15, sheet));
+  }
+
+  // Caméra de suivi : elle garde la personne au centre (zoom et rotation restent libres).
+  followPerson(id, sheet = false) {
+    this.followId = id;
+    this.followSheet(sheet);
+  }
+
+  followSheet(sheet) {
+    const p = this.followId && this.floor?.positionOf(this.followId);
+    if (!p) return;
+    const base = new THREE.Vector3(p.x, 0, p.z);
+    const view = this.viewFor(base, 10, sheet);
+    this.followShift = view.target.clone().sub(base);
+    this.floor.select(this.followId);
+    this.flyTo(view);
+  }
+
+  stopFollow() {
+    this.followId = null;
+    this.followShift = null;
   }
 
   focusFloorPerson(id, sheet = true) {
@@ -1583,6 +1605,15 @@ export class World {
       const shift = new THREE.Vector3(clampedX - target.x, -target.y, clampedZ - target.z);
       target.add(shift);
       this.camera.position.add(shift);
+    }
+    if (this.floor && this.followId && !this.tween) {
+      const pos = this.floor.positionOf(this.followId);
+      if (pos) {
+        const offset = this.camera.position.clone().sub(this.controls.target);
+        const desired = new THREE.Vector3(pos.x, 0, pos.z).add(this.followShift || new THREE.Vector3());
+        this.controls.target.lerp(desired, Math.min(1, dt * 3));
+        this.camera.position.copy(this.controls.target).add(offset);
+      }
     }
     this.controls.update();
     if (this.floor) {

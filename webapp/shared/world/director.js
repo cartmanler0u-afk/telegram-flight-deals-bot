@@ -238,6 +238,27 @@ const SCHEDULED = {
     });
   },
   ghost_close: (cx) => ghostClose(cx),
+  // Fins des journées légendaires : le flag tombe, la conséquence est consignée.
+  elevator_strike_end: (cx) => {
+    const { world } = cx;
+    const strike = world.flags.elevatorStrike;
+    if (!strike) return;
+    world.flags.elevatorStrike = null;
+    cx.commit({ source: "system", kind: "elevator_strike_end", ops: [{ op: "building", elevatorMood: 45, pressure: -6 }], event: { kind: "elevator_strike_end", title: "L'Ascenseur B reprend le travail", text: `Après ${Math.round((world.cycle - strike.since) / 2)} heures de grève, ${strike.stuck || 0} habitant(s) coincé(s) à un étage trop lointain pour l'escalier, il rouvre ses portes, reposé. Ses revendications (${strike.demand}) restent « à l'étude ».`, actors: [], room: "f0.ascenseurs", importance: 4, tags: ["ascenseur", "bâtiment"] } });
+  },
+  blackout_end: (cx, payload) => {
+    const { world } = cx;
+    const blackout = world.flags.blackout;
+    if (!blackout) return;
+    world.flags.blackout = null;
+    const tech = world.people[payload.tech];
+    cx.commit({
+      source: "system",
+      kind: "blackout_end",
+      ops: [...(tech && tech.status === "active" ? [{ op: "person", id: tech.id, reputation: 5, career: "A rallumé le Bâtiment après la panne générale" }] : []), { op: "schedule", dueCycle: world.cycle + 2, kind: "coffee_repair", payload: {} }, { op: "building", mood: 2 }],
+      event: { kind: "blackout_end", title: "Le courant revient dans tout le Bâtiment", text: `${Math.round((world.cycle - blackout.since) / 2)} heures de noir. ${tech && tech.status === "active" ? `${tech.name} remonte de la chaufferie sous les applaudissements.` : "Personne ne sait qui a réparé, ce qui inquiète un peu."} Le distributeur de café, lui, reste en panne par principe.`, actors: [tech?.id].filter((id) => world.people[id]), room: "f12.chaufferie", importance: 4, tags: ["bâtiment", "panne"] },
+    });
+  },
   gathering_end: (cx, payload) => {
     const { world, rng } = cx;
     const guests = (payload.guests || []).map((id) => world.people[id]).filter((p) => p && p.location === payload.room);

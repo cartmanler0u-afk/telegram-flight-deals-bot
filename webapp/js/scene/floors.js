@@ -88,8 +88,9 @@ export function lookFor(p) {
 }
 
 // Activité de l'avatar selon ce que fait vraiment la personne et la place qu'elle occupe.
-function avatarActivity(act, spot) {
+function avatarActivity(act, spot, p = {}) {
   if (spot.kind === "bed") return "sleep";
+  if (p.party && act !== "sleep") return spot.kind === "seat" ? "talk" : "dance";
   if (spot.kind === "seat") {
     if (act === "sleep") return "sleep";
     if (act === "work") return spot.act === "talk" ? "talk" : "work";
@@ -185,7 +186,8 @@ function cat(color = "#c96b5b") {
 // ------------------------------------------------------------------ scène d'un étage
 
 export class FloorScene {
-  constructor(data, { onSelectRoom, onSelectPerson } = {}) {
+  constructor(data, { onSelectRoom, onSelectPerson, arriving = null } = {}) {
+    this.arrivingId = arriving; // la personne suivie sort de l'ascenseur avec la caméra
     this.onSelectRoom = onSelectRoom;
     this.onSelectPerson = onSelectPerson;
     this.scene = new THREE.Scene();
@@ -232,11 +234,11 @@ export class FloorScene {
     scene.background = new THREE.Color(pal.bg);
     scene.fog = new THREE.Fog(pal.bg, 70, 150);
 
-    this.hemi = new THREE.HemisphereLight(night ? "#b8c4ff" : "#eef3ff", "#5b5146", night ? 0.75 : 1.25);
+    this.hemi = new THREE.HemisphereLight("#eef3ff", "#5b5146", 1.25);
     scene.add(this.hemi);
     const { minX, maxX, minZ, maxZ } = plan.bounds;
     const cx = (minX + maxX) / 2;
-    const sun = new THREE.DirectionalLight(night ? "#9fb3ff" : "#fff6e6", night ? 0.7 : 1.9);
+    const sun = new THREE.DirectionalLight("#fff6e6", 1.9);
     sun.position.set(cx + 14, 30, 18);
     sun.target.position.set(cx, 0, 0);
     scene.add(sun.target);
@@ -248,6 +250,7 @@ export class FloorScene {
     sun.shadow.normalBias = 0.03;
     scene.add(sun);
     this.sun = sun;
+    this.setLighting(data);
 
     const statics = new THREE.Group();
     scene.add(statics);
@@ -455,6 +458,44 @@ export class FloorScene {
     this.crowd.dirty = true;
   }
 
+  // Éclairage selon l'heure du Bâtiment, et noir presque complet pendant une panne générale.
+  setLighting(data) {
+    const night = data.hour < 7 || data.hour >= 21;
+    const key = `${night}|${!!data.blackout}`;
+    if (key === this.lightKey) return;
+    this.lightKey = key;
+    if (data.blackout) {
+      this.hemi.color.set("#7d8cc8");
+      this.hemi.intensity = 0.22;
+      this.sun.color.set("#9fb3ff");
+      this.sun.intensity = night ? 0.08 : 0.25;
+      this.scene.fog = new THREE.Fog(this.palette.bg, 18, 60);
+    } else {
+      this.hemi.color.set(night ? "#b8c4ff" : "#eef3ff");
+      this.hemi.intensity = night ? 0.75 : 1.25;
+      this.sun.color.set(night ? "#9fb3ff" : "#fff6e6");
+      this.sun.intensity = night ? 0.7 : 1.9;
+      if (!data.access) this.scene.fog = new THREE.Fog(this.palette.bg, 70, 150);
+    }
+  }
+
+  // Fête du Bâtiment : une boule à facettes au plafond de la pièce où l'on danse.
+  syncParty(data) {
+    const counts = {};
+    for (const p of data.people) if (p.party) counts[p.room] = (counts[p.room] || 0) + 1;
+    const room = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    if (room === this.partyRoom) return;
+    this.disco?.removeFromParent();
+    this.disco = null;
+    this.partyRoom = room;
+    const r = room && this.plan.rooms[room];
+    if (!r) return;
+    const ball = new THREE.Mesh(this.own(new THREE.IcosahedronGeometry(0.45, 1)), mat("#e6e9f2", { metalness: 0.9, roughness: 0.15, emissive: "#ff5fd2", emissiveIntensity: 0.6, flatShading: true }));
+    ball.position.set(r.cx, 2.9, r.cz);
+    this.scene.add(ball);
+    this.disco = ball;
+  }
+
   addRoomTag(room, r) {
     const el = document.createElement("button");
     el.type = "button";
@@ -488,7 +529,7 @@ export class FloorScene {
     add("floor-room-name", room.name);
     add("count-soft", `${room.total} 👥`);
     // Le palier affiche l'humeur réelle de l'Ascenseur B.
-    if (room.key === "palier") add("small muted", `· 🛗 B ${this.data?.elevator ?? "?"}/100`);
+    if (room.key === "palier") add("small muted", this.data?.strike ? "· 🛗 B EN GRÈVE" : this.data?.blackout ? "· 🛗 B à l'arrêt (panne)" : `· 🛗 B ${this.data?.elevator ?? "?"}/100`);
     if (extra) add("small muted", `+${extra} hors champ`);
     if (room.offPlan) add("small", "⚠️");
     tag.el.title = room.lastEvent ? `${room.name} — ${room.lastEvent}` : room.name;
@@ -557,6 +598,7 @@ export class FloorScene {
     }
 
     // Présents : déjà là (changement de pièce ou d'activité), ou arrivés par l'ascenseur.
+    let arrivals = 0;
     const order = [...incoming.values()].sort((a, b) => Number(b.followed) - Number(a.followed) || Number(b.star) - Number(a.star) || b.influence - a.influence);
     for (const p of order) {
       const sleeping = this.sleepers.get(p.id);
@@ -595,7 +637,7 @@ export class FloorScene {
       const spot = this.freeSpot(p.room, this.prefsFor(p), seed);
       if (!spot) continue; // pièce pleine : compté dans l'étiquette (« hors champ »)
       const entry = elevatorSpot();
-      const arriving = !initial && previous && entry && p.room !== palierId;
+      const arriving = (this.arrivingId === p.id || (!initial && previous)) && entry && p.room !== palierId;
       if (spot.kind === "bed" && p.act === "sleep" && !arriving) {
         this.addSleeper(p, spot);
         continue;
@@ -606,13 +648,21 @@ export class FloorScene {
         a.person.place(spot);
         this.pose(a, p);
       } else {
-        a.person.place({ ...entry, stand: true });
+        // Arrivées par l'ascenseur : réparties entre les cabines et échelonnées (pas de téléportation en grappe).
+        const h = hashStr(p.id);
+        const cabin = cabins.length ? cabins[h % cabins.length] : entry;
+        const door = { ...cabin, x: cabin.x + ((h >> 4) % 7 - 3) * 0.2, z: cabin.z + ((h >> 8) % 5 - 2) * 0.2, stand: true };
+        a.person.place(door);
         a.person.setStatus({ emoji: "🛗" });
-        a.person.walk(walkPath(this.plan, entry, palierId, spot, p.room), spot, () => this.pose(a, a.data));
+        a.person.root.visible = this.arrivingId === p.id;
+        a.pendingWalk = { at: performance.now() + (this.arrivingId === p.id ? 0 : (arrivals++ % 40) * 180 + (h % 300)), path: walkPath(this.plan, door, palierId, spot, p.room), spot };
       }
     }
 
+    this.arrivingId = null;
     this.syncAnimals(data);
+    this.setLighting(data);
+    this.syncParty(data);
     for (const room of data.rooms) this.renderRoomTag(room);
     this.crowd.dirty = true;
   }
@@ -637,6 +687,11 @@ export class FloorScene {
   }
 
   release(a) {
+    if (a.pendingWalk) {
+      // Pas encore sorti de l'ascenseur : il apparaît et part directement vers sa nouvelle destination.
+      a.pendingWalk = null;
+      a.person.root.visible = true;
+    }
     if (a.spot && a.spot.taken === a.data.id) a.spot.taken = null;
     a.roomBefore = a.room;
     a.spot = null;
@@ -649,7 +704,7 @@ export class FloorScene {
       this.toSleeper(a);
       return;
     }
-    a.person.activity = avatarActivity(p.act, spot);
+    a.person.activity = avatarActivity(p.act, spot, p);
     a.person.setStatus({ emoji: ACT_ICON[p.act] || "" });
     a.person.setBadge(p.followed ? "📌" : p.star ? "⭐" : "");
     a.person.tagEl.title = `${p.name} — ${p.title} · ${p.label}`;
@@ -735,7 +790,7 @@ export class FloorScene {
       const key = `${line.who}|${line.text}`;
       if (now - (this.lastSaid.get(key) || -Infinity) < 180000) continue;
       this.lastSaid.set(key, now);
-      a.person.say(line.text, 6500, 1);
+      a.person.say(line.text.replace(/^[^«]{1,40}?\s:\s(?=«)/, ""), 6500, 1); // la bulle est déjà sur la bonne personne
       return;
     }
     // Sinon, ce que fait vraiment quelqu'un en ce moment (pensée, pas réplique).
@@ -796,6 +851,13 @@ export class FloorScene {
     this.ambient(now);
     this.bubbles(now);
     for (const [id, a] of this.avatars) {
+      if (a.pendingWalk) {
+        if (now < a.pendingWalk.at) continue;
+        const { path, spot } = a.pendingWalk;
+        a.pendingWalk = null;
+        a.person.root.visible = true;
+        a.person.walk(path, spot, () => this.pose(a, a.data));
+      }
       a.person.update(dt, t);
       if (a.fadeFrom) {
         const k = Math.min(1, (now - a.fadeFrom) / 600);
@@ -813,6 +875,10 @@ export class FloorScene {
       } else if (m.userData.head) {
         m.userData.head.position.z = (a.data.species === "pigeon" ? 0.12 : 0.2) + Math.max(0, Math.sin(a.phase * 4)) * 0.03;
       }
+    }
+    if (this.disco) {
+      this.disco.rotation.y += dt * 1.2;
+      this.disco.material.emissive.setHSL((t * 0.15) % 1, 0.9, 0.5);
     }
     for (const d of this.dynamics) {
       const o = d.obj;
@@ -841,7 +907,7 @@ export class FloorScene {
       const dist = camera.position.distanceTo(controls.target);
       const near = dist < 24;
       for (const [id, a] of this.avatars) {
-        a.person.label.visible = near || id === this.selected || a.data.followed || a.person.talking;
+        a.person.label.visible = a.person.root.visible && (near || id === this.selected || a.data.followed || a.person.talking);
         const compact = dist > 34 && id !== this.selected;
         if (compact !== a.compact) {
           a.compact = compact;

@@ -44,6 +44,10 @@ const ROOM_VERBS = {
   secret: ["fouille discrètement", "fait semblant d'être perdu"],
   owner: ["attend le propriétaire"],
 };
+// Journées légendaires : grève de l'Ascenseur B, panne générale.
+const STUCK_LABELS = ["reste coincé·e à l'étage : l'Ascenseur B est en grève", "regarde l'escalier, calcule, renonce", "écrit une pétition de soutien… à l'escalier"];
+const BLACKOUT_LABELS = ["travaille à la lampe de poche", "raconte une histoire de fantômes à la bougie", "cherche l'interrupteur à tâtons", "attend le retour du courant en grignotant ses réserves"];
+const BLACKOUT_ROOMS = ["f0.hall", "f0.cafeteria", "f8.salon"];
 
 function activityFor(rng, p, room, slot) {
   if (!room) return { kind: "idle", label: "est quelque part" };
@@ -196,9 +200,15 @@ export function lifeCycle(cx) {
   const laws = Object.values(world.laws).filter((l) => l.status === "enacted").map((l) => l.code);
   const moves = [];
   const refusals = [];
+  const stuck = new Set();
+  const strike = world.flags.elevatorStrike?.until > world.cycle;
+  const blackout = world.flags.blackout?.until > world.cycle;
+  const stairsOnly = strike || blackout; // l'Ascenseur B ne roule pas : escalier, et pas au-delà de 3 étages
   for (const p of people) {
     const slot = slotOf(p, cx.hour, cx.weekday);
     let target = targetFor(cx, p, slot);
+    // Panne générale : une partie des postes plongés dans le noir migre vers les lieux communs.
+    if (blackout && slot === "work" && p.kind !== "animal" && !(p.flags?.goTo?.until > world.cycle) && rng.chance(0.35)) target = rng.pick(BLACKOUT_ROOMS);
     if (!target || !world.building.rooms[target]) target = p.location;
     let to = target;
     if (target !== p.location) {
@@ -207,8 +217,11 @@ export function lifeCycle(cx) {
       else if (floorOf(target) !== floorOf(p.location) && p.kind !== "animal") {
         // L'Ascenseur B a son caractère ; les méfiants prennent l'escalier.
         const dist = floorDistance(world, p.location, target);
-        const stairs = p.habits?.includes("stairs") || dist <= 1;
-        if (stairs) p.needs.energy = clamp(p.needs.energy - Math.min(12, dist * 1.5), 0, 100);
+        const stairs = stairsOnly || p.habits?.includes("stairs") || dist <= 1;
+        if (stairsOnly && dist > 3) {
+          to = p.location;
+          stuck.add(p);
+        } else if (stairs) p.needs.energy = clamp(p.needs.energy - Math.min(12, dist * (stairsOnly ? 2.5 : 1.5)), 0, 100);
         else {
           const grudge = (world.building.elevator.grudges[p.id] || 0) > world.cycle;
           const refuse = grudge ? 0.85 : world.building.elevator.mood < 30 ? 0.2 : 0.015;
@@ -220,11 +233,13 @@ export function lifeCycle(cx) {
       }
     }
     const room = world.building.rooms[to];
-    const changed = to !== p.location || slot !== p.slot || rng.chance(0.08);
+    const changed = to !== p.location || slot !== p.slot || rng.chance(blackout ? 0.5 : 0.08);
     p.flags.onBreak = slot === "work" && to !== p.workRoom && to !== p.location ? true : slot === "work" && to === p.workRoom ? false : p.flags.onBreak;
     p.slot = slot;
-    if (to !== p.location || changed) {
+    if (to !== p.location || changed || stuck.has(p)) {
       const activity = refusals.includes(p) ? { kind: "transit", label: "attend l'Ascenseur B, qui fait semblant de ne pas le voir" } : activityFor(rng, p, room, slot);
+      if (stuck.has(p) && activity.kind !== "sleep") activity.label = rng.pick(STUCK_LABELS);
+      else if (blackout && activity.kind !== "sleep" && p.kind !== "animal" && rng.chance(0.6)) activity.label = rng.pick(BLACKOUT_LABELS);
       if (to !== p.location) moves.push({ op: "move", id: p.id, to, activity });
       else p.activity = { ...activity, since: world.cycle };
     }
@@ -232,6 +247,16 @@ export function lifeCycle(cx) {
   if (moves.length) {
     const res = cx.commit({ source: "system", kind: "routine", observational: true, hour: cx.hour, laws, ops: moves });
     if (res.ok) cx.metric("moves", moves.length);
+  }
+  if (stuck.size) {
+    cx.metric("stuck", stuck.size);
+    if (strike) {
+      // On compte des personnes (pas des tentatives) : chacune n'est comptée qu'une fois.
+      const seen = new Set(world.flags.elevatorStrike.stuckIds || []);
+      for (const p of stuck) seen.add(p.id);
+      world.flags.elevatorStrike.stuckIds = [...seen];
+      world.flags.elevatorStrike.stuck = seen.size;
+    }
   }
 
   // Occupation réelle des pièces après les déplacements.

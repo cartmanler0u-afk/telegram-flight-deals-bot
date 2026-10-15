@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createInitialState, applyAction, advance, toClientState, migrateState, pendingJobs, OfficeError } from "../webapp/shared/engine.js";
 import { advanceWorld, worldView, personSheet, buildReport, flushNotifications, attachWorldNarration, worldJobPacket } from "../webapp/shared/world/index.js";
 import { commit, checkInvariants, totalMoney, accountOf } from "../webapp/shared/world/ops.js";
-import { causalChain } from "../webapp/shared/world/memory.js";
+import { causalChain, compact, LIMITS } from "../webapp/shared/world/memory.js";
 import { queueAiJobs, sanitizeNarration } from "../webapp/shared/world/ai.js";
 import { OfficeRuntime } from "../webapp/shared/runtime.js";
 import { createTemplateGenerator } from "../webapp/shared/templates.js";
@@ -731,4 +731,107 @@ test("3D : assez de places (lits, chaises, foule) pour que chaque habitant soit 
     for (const [room, n] of Object.entries(occ)) if (capacity[room] !== undefined && n > capacity[room]) overflow.push(`${room} ${n}>${capacity[room]}`);
   }
   assert.deepEqual(overflow, []);
+});
+
+test("journées légendaires : extrêmement rares, elles changent vraiment le Bâtiment puis se terminent", () => {
+  const legendary = TEMPLATES.filter((t) => t.tier === "legendary");
+  assert.deepEqual(legendary.map((t) => t.id).sort(), ["blackout", "building_party", "elevator_strike", "ghost_day"]);
+  const { world: w0 } = freshWorld();
+  for (const t of legendary) assert.ok(templateChance(w0.config, t) <= 0.0015, `${t.id} reste extrêmement rare (${templateChance(w0.config, t)})`);
+  assert.equal(templateChance({ ...w0.config, rarity: { ...w0.config.rarity, legendary: 0 } }, legendary[0]), 0);
+
+  const start = Date.UTC(2026, 9, 16, 6, 0); // vendredi 16 octobre, 8 h à Paris
+  const state = createInitialState(start, { bossName: "Cartman", tzOffset: PARIS });
+  const w = state.world;
+  let now = start;
+  const at = (t) => {
+    now = Math.max(now, t);
+    while (w.lastCycleAt + 30 * 60000 <= now) advanceWorld(state, now);
+  };
+  const force = (template) => applyAction(state, "world.debug.event", { template }, now, { devTools: true }).public;
+  const level = (room) => w.building.floors[room.split(".")[0]].level;
+  at(start + HOUR);
+
+  // Grève de l'Ascenseur B : escalier seulement, jamais plus de trois étages d'un coup.
+  w.building.elevator.mood = 20;
+  force("elevator_strike");
+  assert.ok(w.flags.elevatorStrike);
+  let maxJump = 0;
+  for (let i = 0; i < 8; i++) {
+    const before = Object.fromEntries(Object.values(w.people).map((p) => [p.id, p.location]));
+    at(now + 30 * 60000);
+    for (const p of Object.values(w.people)) if (p.kind !== "animal" && p.location && before[p.id]) maxJump = Math.max(maxJump, Math.abs(level(p.location) - level(before[p.id])));
+  }
+  assert.ok(maxJump <= 3, `personne ne saute plus de trois étages (${maxJump})`);
+  assert.ok(w.flags.elevatorStrike.stuck > 0, "des habitants sont coincés à leur étage");
+  const mood = w.building.elevator.mood;
+  at(now + 14 * HOUR);
+  assert.equal(w.flags.elevatorStrike, null);
+  assert.ok(w.events.some((e) => e.kind === "elevator_strike_end"));
+  assert.ok(w.building.elevator.mood > mood, "il revient reposé");
+
+  // Panne générale (lundi 10 h) : la 3D le sait, les habitants passent à la lampe de poche.
+  at(Date.UTC(2026, 9, 19, 8, 0));
+  w.building.pressure = 50;
+  force("blackout");
+  at(now + HOUR);
+  assert.equal(exploreQuery(state, { view: "floor3d", id: "f0" }, now).blackout, true);
+  assert.ok(Object.values(w.people).filter((p) => /lampe|bougie|interrupteur|courant/.test(p.activity?.label || "")).length >= 20);
+  at(now + 6 * HOUR);
+  assert.equal(w.flags.blackout, null);
+  assert.ok(w.events.some((e) => e.kind === "blackout_end"));
+
+  // Fête du Bâtiment (vendredi 19 h) : le Hall se remplit vraiment, puis la fête se termine.
+  at(Date.UTC(2026, 9, 23, 17, 0));
+  w.mood = 80;
+  w.flags.party = null;
+  force("building_party");
+  at(now + HOUR);
+  const f0 = exploreQuery(state, { view: "floor3d", id: "f0" }, now);
+  assert.ok(f0.rooms.find((r) => r.id === "f0.hall").total >= 60, "le Hall est bondé");
+  assert.ok(f0.people.filter((p) => p.party).length >= 40, "les invités sont là pour la fête");
+  at(now + 4 * HOUR);
+  assert.ok(w.events.some((e) => e.kind === "gathering_end" && /Fête du Bâtiment/.test(e.title)));
+
+  // Jour du Lendemain (samedi 10 h) : l'Étage fantôme ouvert, une prophétie (hypothèse), puis fermeture.
+  at(Date.UTC(2026, 9, 24, 8, 0));
+  w.building.floors.f10.discovered = true;
+  force("ghost_day");
+  at(now + HOUR);
+  assert.ok(Object.values(w.people).filter((p) => p.location?.startsWith("f10.")).length >= 3, "des curieux montent");
+  const prophecy = Object.values(w.facts).find((f) => f.kind === "prophecy");
+  assert.ok(prophecy && prophecy.public && prophecy.status === "hypothesis" && prophecy.truth === null, "une prophétie n'est qu'une hypothèse");
+  at(now + 26 * HOUR);
+  assert.ok(!(w.flags.ghostOpenUntil > w.cycle), "l'Étage fantôme se referme");
+
+  assert.deepEqual(w.errors, []);
+  assert.equal(w.stats.rollbacks || 0, 0);
+  assert.deepEqual(checkInvariants(w, expectedMoney(w)), []);
+});
+
+test("mémoire bornée : affaires closes, croyances orphelines et consignes expirées sont élaguées", () => {
+  const { world } = settled();
+  const w = world;
+  for (let i = 0; i < 60; i++) {
+    w.plots[`old${i}`] = { id: `old${i}`, state: "resolved", beats: [], createdCycle: i, lastBeatCycle: i, kind: "test", title: "vieille histoire" };
+    w.mysteries[`m${i}`] = { id: `m${i}`, status: "solved", openedCycle: i, solvedCycle: i + 1, clues: [], hypotheses: [], investigators: [] };
+    w.cases ||= {};
+    w.cases[`cs${i}`] = { id: `cs${i}`, status: "judged", filedCycle: i, judgedCycle: i + 1 };
+    w.objects[`o-test-${i}`] = { id: `o-test-${i}`, name: "Colis", room: "fm1.objets", state: "saisi", history: [], createdCycle: 0 };
+  }
+  const someone = Object.values(w.people).find((p) => p.kind === "resident");
+  someone.beliefs = [...(someone.beliefs || []), ...Array.from({ length: 30 }, (_, i) => ({ fact: `oublie${i}`, stance: "croit" }))];
+  someone.flags = { ...someone.flags, goTo: { room: "f0.hall", until: w.cycle - 1, reason: "test" } };
+  const openMysteries = Object.values(w.mysteries).filter((m) => m.status === "open").length;
+  w.cycle += 30 * 48;
+  compact(w);
+  assert.ok(Object.values(w.plots).filter((x) => !["active", "dormant"].includes(x.state)).length <= LIMITS.closedPlots);
+  assert.ok(Object.values(w.mysteries).filter((m) => m.status !== "open").length <= LIMITS.closedMysteries);
+  assert.equal(Object.values(w.mysteries).filter((m) => m.status === "open").length, openMysteries, "les mystères ouverts restent tous");
+  assert.ok(Object.values(w.cases).length <= LIMITS.judgedCases);
+  assert.ok(Object.values(w.objects).filter((o) => o.createdCycle !== undefined).length <= LIMITS.createdObjects);
+  assert.ok(w.objects["o-cafe"], "les objets d'origine restent");
+  assert.ok(someone.beliefs.every((b) => w.facts[b.fact]) && someone.beliefs.length <= LIMITS.beliefs, "plus de croyance orpheline");
+  assert.equal(someone.flags.goTo, undefined, "consigne expirée effacée");
+  assert.ok(w.plots.old59 && !w.plots.old0, "on garde les plus récentes");
 });
