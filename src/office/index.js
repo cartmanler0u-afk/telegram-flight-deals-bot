@@ -27,6 +27,17 @@ function notificationText(note, state) {
   return note.text;
 }
 
+async function checkWebappUrl(url) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const page = await res.text();
+    if (res.ok && page.includes('id="splash"')) console.log(`Mini app joignable à l'adresse WEBAPP_URL (${url}).`);
+    else console.error(`WEBAPP_URL (${url}) répond ${res.status} mais ce n'est pas la mini app du QG : vérifiez la variable.`);
+  } catch (err) {
+    console.error(`WEBAPP_URL injoignable (${url}) : ${err.cause?.code || err.message}. Vérifiez la variable (faute de frappe ?).`);
+  }
+}
+
 export async function startOffice(bot) {
   const ai = config.anthropicApiKey
     ? { enabled: true, model: config.anthropicModel }
@@ -93,6 +104,9 @@ export async function startOffice(bot) {
     } catch (err) {
       console.error("Impossible de configurer le bouton menu du QG :", err.message);
     }
+    // Telegram ouvre exactement WEBAPP_URL : on vérifie qu'elle mène bien à cette mini app
+    // (faute de frappe, autre domaine…), sinon la mini app reste sur l'écran d'attente de Telegram.
+    setTimeout(() => checkWebappUrl(config.webappUrl), 30000).unref();
   } else {
     console.log("WEBAPP_URL non défini : la commande /office expliquera comment publier la mini app.");
   }
